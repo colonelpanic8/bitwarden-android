@@ -305,6 +305,8 @@ dependencies {
     implementation(platform(libs.square.okhttp.bom))
     implementation(libs.square.okhttp)
     implementation(libs.timber)
+    implementation(libs.yubico.yubikit.android)
+    implementation(libs.yubico.yubikit.fido)
 
     // For now we are restricted to running Compose tests for debug builds only
     debugImplementation(libs.androidx.compose.ui.test.manifest)

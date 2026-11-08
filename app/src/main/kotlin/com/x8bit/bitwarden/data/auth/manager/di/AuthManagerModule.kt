@@ -32,6 +32,8 @@ import com.x8bit.bitwarden.data.auth.manager.UserLogoutManager
 import com.x8bit.bitwarden.data.auth.manager.UserLogoutManagerImpl
 import com.x8bit.bitwarden.data.auth.manager.UserStateManager
 import com.x8bit.bitwarden.data.auth.manager.UserStateManagerImpl
+import com.x8bit.bitwarden.data.auth.manager.YubiKeyPasskeyManager
+import com.x8bit.bitwarden.data.auth.manager.YubiKeyPasskeyManagerImpl
 import com.x8bit.bitwarden.data.platform.datasource.disk.PushDiskSource
 import com.x8bit.bitwarden.data.platform.datasource.disk.SettingsDiskSource
 import com.x8bit.bitwarden.data.platform.manager.CredentialExchangeRegistryManager
@@ -211,6 +213,14 @@ object AuthManagerModule {
         firstTimeActionManager = firstTimeActionManager,
         vaultLockManager = vaultLockManager,
         policyManager = policyManager,
+        dispatcherManager = dispatcherManager,
+    )
+
+    @Provides
+    @Singleton
+    fun providesYubiKeyPasskeyManager(
+        dispatcherManager: DispatcherManager,
+    ): YubiKeyPasskeyManager = YubiKeyPasskeyManagerImpl(
         dispatcherManager = dispatcherManager,
     )
 }

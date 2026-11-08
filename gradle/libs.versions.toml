@@ -57,6 +57,7 @@ robolectric = "4.16.1"
 testng = "7.12.0"
 timber = "5.0.1"
 turbine = "1.2.1"
+yubikit = "3.3.0"
 zxing = "3.5.4"
 
 [libraries]
@@ -137,6 +138,8 @@ square-retrofit-bom = { module = "com.squareup.retrofit2:retrofit-bom", version.
 square-retrofit-kotlinx-serialization = { module = "com.squareup.retrofit2:converter-kotlinx-serialization" }
 square-turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+yubico-yubikit-android = { module = "com.yubico.yubikit:android", version.ref = "yubikit" }
+yubico-yubikit-fido = { module = "com.yubico.yubikit:fido", version.ref = "yubikit" }
 zxing-zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 testng = { group = "org.testng", name = "testng", version.ref = "testng" }
 
