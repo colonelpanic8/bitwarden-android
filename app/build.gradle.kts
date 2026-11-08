@@ -34,6 +34,17 @@ val userProperties = Properties().apply {
 }
 
 /**
+ * Loads the release signing configuration written by the release workflow. Release builds are
+ * left unsigned when it is absent.
+ */
+val releaseKeystoreProperties = Properties().apply {
+    val keystorePropertiesFile = File(rootDir, "keystore.properties")
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+
+/**
  * Loads CI-specific build properties that are not checked into source control.
  */
 val ciProperties = Properties().apply {
@@ -96,6 +107,14 @@ configure<ApplicationExtension> {
             storeFile = file("../keystores/debug.keystore")
             storePassword = "android"
         }
+        if (!releaseKeystoreProperties.isEmpty) {
+            create("release") {
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(releaseKeystoreProperties.getProperty("storeFile"))
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+            }
+        }
     }
 
     buildTypes {
@@ -125,6 +144,7 @@ configure<ApplicationExtension> {
             buildConfigField(type = "boolean", name = "HAS_LOGS_ENABLED", value = "false")
         }
         release {
+            signingConfig = signingConfigs.findByName("release")
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
@@ -146,6 +166,7 @@ configure<ApplicationExtension> {
         }
         create("fdroid") {
             dimension = "mode"
+            applicationId = "com.colonelpanic.wardenkey"
         }
     }
 

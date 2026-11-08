@@ -1,0 +1,57 @@
+name: Fork CI
+on:
+  push:
+    branches:
+      - yubikey-passkey-login
+      - fork/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, test and build the debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+
+      - name: Detekt
+        run: ./gradlew detekt
+
+      - name: Unit tests for the fork's changes
+        run: >-
+          ./gradlew :network:testDebugUnitTest :app:testFdroidDebugUnitTest
+          --tests '*WebAuthn*' --tests '*Passkey*' --tests '*IdentityService*'
+          --tests '*UserStateJsonExtensions*' --tests '*AuthRepositoryTest*'
+          --tests '*VaultRepositoryTest*'
+
+      - name: Build the debug APK
+        run: ./gradlew :app:assembleFdroidDebug
+
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: warden-key-debug
+          path: app/build/outputs/apk/fdroid/debug/*.apk
+          retention-days: 14

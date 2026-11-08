@@ -28,4 +28,4 @@ release:
     ./gradlew :app:assembleFdroidRelease
 
 install-debug:
-    adb install -r app/build/outputs/apk/fdroid/debug/com.colonelpanic.keytap.dev-fdroid.apk
+    adb install -r app/build/outputs/apk/fdroid/debug/com.colonelpanic.wardenkey.dev-fdroid.apk

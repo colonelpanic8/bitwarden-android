@@ -1,0 +1,109 @@
+name: Fork release
+on:
+  push:
+    tags:
+      - 'v*-wk.*'
+
+permissions:
+  contents: write
+  packages: read
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+
+jobs:
+  release:
+    name: Build, verify and publish the signed APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # SHA-256 of the fork's release certificate; never publish an APK signed by anything else.
+      EXPECTED_CERT_SHA256: e1b9e0fe0bd0fb6bcd338705f1c98407b97561682fed5b538a55c29d1b94be99
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
+        with:
+          cache-read-only: true
+
+      - name: Derive the version from the tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          # vYYYY.M.P-wk.N: upstream version plus the fork's release number.
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v20([0-9]{2})\.([0-9]{1,2})\.([0-9]{1,2})-wk\.([1-9][0-9]?)$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME must look like v2026.11.0-wk.1"
+            exit 1
+          fi
+          y=$((10#${BASH_REMATCH[1]})); m=$((10#${BASH_REMATCH[2]})); p=$((10#${BASH_REMATCH[3]})); n=$((10#${BASH_REMATCH[4]}))
+          code=$(( ((y * 100 + m) * 100 + p) * 100 + n ))
+          sed -i \
+            -e "s/^appVersionCode = .*/appVersionCode = \"$code\"/" \
+            -e "s/^appVersionName = .*/appVersionName = \"${GITHUB_REF_NAME#v}\"/" \
+            gradle/libs.versions.toml
+          grep '^appVersion' gradle/libs.versions.toml
+
+      - name: Write the signing configuration
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is missing; refusing to build an unsigned release"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+          printf 'storeFile=release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" "$ANDROID_KEY_PASSWORD" > keystore.properties
+
+      - name: Build the release APK
+        run: ./gradlew :app:assembleFdroidRelease
+
+      - name: Verify the signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/fdroid/release/com.colonelpanic.wardenkey-fdroid.apk
+          tools=("$ANDROID_HOME"/build-tools/*)
+          apksigner="$(printf '%s\n' "${tools[@]}" | sort -V | tail -1)/apksigner"
+          "$apksigner" verify "$apk"
+          certs=$("$apksigner" verify --print-certs "$apk" | sed -n 's/.*certificate SHA-256 digest: //p' | sort -u | paste -sd,)
+          if [ "$certs" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK signers ($certs) do not match the fork's release certificate"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$apk" "dist/warden-key-$GITHUB_REF_NAME.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS)
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f release.keystore keystore.properties
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Warden Key $GITHUB_REF_NAME" \
+            --notes "Personal build of Bitwarden Android (com.colonelpanic.wardenkey) with YubiKey passkey login and PRF unlock, built from $GITHUB_SHA. Signing certificate SHA-256: $EXPECTED_CERT_SHA256."

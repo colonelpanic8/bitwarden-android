@@ -1,5 +1,24 @@
 # Bitwarden Android
 
+## Warden Key (personal fork)
+
+This fork builds **Warden Key** (`com.colonelpanic.wardenkey`), the F-Droid flavor of the
+Bitwarden Password Manager with a separate application ID, so it installs alongside the
+official app. It adds **Log in with passkey** and **Unlock with passkey** using a YubiKey
+over NFC or USB. The key's FIDO2 PRF (`hmac-secret`) output unwraps the vault key, following
+Bitwarden's WebAuthn PRF protocol. Enroll the passkey with encryption in the web vault first.
+The server must support passkey login, as Vaultwarden with
+[dani-garcia/vaultwarden#7784](https://github.com/dani-garcia/vaultwarden/pull/7784) does.
+It is not an official Bitwarden release.
+
+- [Download the latest signed APK](https://github.com/colonelpanic8/bitwarden-android/releases/latest)
+- [Add to Obtainium](obtainium://add/https://github.com/colonelpanic8/bitwarden-android)
+- Signing certificate SHA-256:
+  `E1:B9:E0:FE:0B:D0:FB:6B:CD:33:87:05:F1:C9:84:07:B9:75:61:68:2F:ED:5B:53:8A:55:C2:9D:1B:94:BE:99`
+
+Releases are published by `.github/workflows/fork-release.yml` from `vYYYY.M.P-wk.N` tags.
+`nix develop` (or `direnv allow`) provides the toolchain; `just build` builds a debug APK.
+
 ## Contents
 
 - [Compatibility](#compatibility)
