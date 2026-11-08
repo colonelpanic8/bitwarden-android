@@ -143,11 +143,8 @@ private fun PasskeyPinDialog(
         title = { Text(text = stringResource(id = BitwardenString.security_key_pin)) },
         text = {
             Column {
-                @Suppress("MaxLineLength")
                 Text(
-                    text = stringResource(
-                        id = BitwardenString.enter_the_pin_of_the_security_key_that_holds_your_passkey,
-                    ),
+                    text = stringResource(id = BitwardenString.this_security_key_needs_its_pin),
                     style = BitwardenTheme.typography.bodyMedium,
                 )
                 Spacer(modifier = Modifier.height(height = 16.dp))

@@ -3,10 +3,11 @@
     <string name="log_in_with_passkey">Log in with passkey</string>
     <string name="unlock_with_passkey">Unlock with passkey</string>
     <string name="security_key_pin">Security key PIN</string>
-    <string name="enter_the_pin_of_the_security_key_that_holds_your_passkey">Enter the PIN of the security key that holds your passkey.</string>
+    <string name="this_security_key_needs_its_pin">This security key needs its PIN. Enter it, then tap or insert the key.</string>
     <string name="verifying_passkey">Verifying passkey…</string>
     <string name="incorrect_pin_x_attempts_remaining">Incorrect PIN. %1$d attempts remaining.</string>
     <string name="this_security_key_has_no_passkey_for_this_account">This security key has no passkey for this account.</string>
     <string name="this_passkey_cannot_unlock_your_vault">This passkey can’t unlock your vault. Make sure it was set up with encryption in the web vault.</string>
     <string name="the_security_key_could_not_be_read_hold_it_in_place_and_try_again">The security key couldn’t be read. Hold it in place and try again.</string>
+    <string name="this_security_key_cannot_verify_you">This security key can’t verify you. Set a PIN or turn on user verification on it.</string>
 </resources>

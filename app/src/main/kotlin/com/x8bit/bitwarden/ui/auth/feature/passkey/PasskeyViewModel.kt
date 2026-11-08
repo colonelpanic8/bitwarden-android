@@ -33,6 +33,7 @@ class PasskeyViewModel @Inject constructor(
 ) : BaseViewModel<PasskeyState, Unit, PasskeyAction>(
     initialState = PasskeyState(
         isUnlockAvailable = authRepository.getPasskeyUnlockRequest() != null,
+        isPinRequired = false,
         dialog = null,
     ),
 ) {
@@ -73,9 +74,13 @@ class PasskeyViewModel @Inject constructor(
     }
 
     private fun handleStartClick(action: PasskeyAction.StartClick) {
-        mutableStateFlow.value = state.copy(
-            dialog = PasskeyState.DialogState.EnterPin(mode = action.mode, pin = ""),
-        )
+        if (state.isPinRequired) {
+            mutableStateFlow.value = state.copy(
+                dialog = PasskeyState.DialogState.EnterPin(mode = action.mode, pin = ""),
+            )
+        } else {
+            beginWaitingForKey(mode = action.mode, pin = null)
+        }
     }
 
     private fun handlePinChange(action: PasskeyAction.PinChange) {
@@ -86,7 +91,23 @@ class PasskeyViewModel @Inject constructor(
     private fun handlePinSubmit() {
         val dialog = state.dialog as? PasskeyState.DialogState.EnterPin ?: return
         if (dialog.pin.isEmpty()) return
-        when (dialog.mode) {
+        val assertionRequest = dialog.assertionRequest
+        if (assertionRequest != null) {
+            mutableStateFlow.value = state.copy(
+                dialog = PasskeyState.DialogState.WaitingForKey(
+                    mode = dialog.mode,
+                    pin = dialog.pin,
+                    assertionRequest = assertionRequest,
+                    loginToken = dialog.loginToken,
+                ),
+            )
+        } else {
+            beginWaitingForKey(mode = dialog.mode, pin = dialog.pin)
+        }
+    }
+
+    private fun beginWaitingForKey(mode: PasskeyMode, pin: String?) {
+        when (mode) {
             PasskeyMode.LOGIN -> {
                 mutableStateFlow.value = state.copy(
                     dialog = PasskeyState.DialogState.Loading(BitwardenString.loading.asText()),
@@ -94,7 +115,7 @@ class PasskeyViewModel @Inject constructor(
                 viewModelScope.launch {
                     sendAction(
                         PasskeyAction.Internal.LoginRequestReceive(
-                            pin = dialog.pin,
+                            pin = pin,
                             result = authRepository.getPasskeyLoginRequest(),
                         ),
                     )
@@ -108,7 +129,7 @@ class PasskeyViewModel @Inject constructor(
                         ?.let {
                             PasskeyState.DialogState.WaitingForKey(
                                 mode = PasskeyMode.UNLOCK,
-                                pin = dialog.pin,
+                                pin = pin,
                                 assertionRequest = it,
                                 loginToken = null,
                             )
@@ -157,41 +178,23 @@ class PasskeyViewModel @Inject constructor(
 
     private fun handleAssertionReceive(action: PasskeyAction.Internal.AssertionReceive) {
         when (val result = action.result) {
-            is PasskeyAssertionResult.Success -> {
-                val token = action.dialog.loginToken
-                val prfOutput = result.prfOutput
-                when {
-                    action.dialog.mode == PasskeyMode.LOGIN && token != null -> {
-                        viewModelScope.launch {
-                            sendAction(
-                                PasskeyAction.Internal.LoginResultReceive(
-                                    authRepository.loginWithPasskey(
-                                        token = token,
-                                        assertion = result,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
+            is PasskeyAssertionResult.Success -> handleAssertionSuccess(action.dialog, result)
 
-                    prfOutput != null -> {
-                        viewModelScope.launch {
-                            sendAction(
-                                PasskeyAction.Internal.UnlockResultReceive(
-                                    vaultRepository.unlockVaultWithWebAuthnPrf(
-                                        credentialId = result.credentialId,
-                                        prfOutput = prfOutput,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-
-                    else -> showError(
-                        BitwardenString.this_passkey_cannot_unlock_your_vault.asText(),
-                    )
-                }
+            PasskeyAssertionResult.PinRequired -> {
+                mutableStateFlow.value = state.copy(
+                    isPinRequired = true,
+                    dialog = PasskeyState.DialogState.EnterPin(
+                        mode = action.dialog.mode,
+                        pin = "",
+                        assertionRequest = action.dialog.assertionRequest,
+                        loginToken = action.dialog.loginToken,
+                    ),
+                )
             }
+
+            PasskeyAssertionResult.UserVerificationUnavailable -> showError(
+                BitwardenString.this_security_key_cannot_verify_you.asText(),
+            )
 
             is PasskeyAssertionResult.InvalidPin -> showError(
                 BitwardenString.incorrect_pin_x_attempts_remaining.asText(
@@ -206,6 +209,45 @@ class PasskeyViewModel @Inject constructor(
             is PasskeyAssertionResult.Error -> showError(
                 BitwardenString.the_security_key_could_not_be_read_hold_it_in_place_and_try_again
                     .asText(),
+            )
+        }
+    }
+
+    private fun handleAssertionSuccess(
+        dialog: PasskeyState.DialogState.WaitingForKey,
+        result: PasskeyAssertionResult.Success,
+    ) {
+        val token = dialog.loginToken
+        val prfOutput = result.prfOutput
+        when {
+            dialog.mode == PasskeyMode.LOGIN && token != null -> {
+                viewModelScope.launch {
+                    sendAction(
+                        PasskeyAction.Internal.LoginResultReceive(
+                            authRepository.loginWithPasskey(
+                                token = token,
+                                assertion = result,
+                            ),
+                        ),
+                    )
+                }
+            }
+
+            prfOutput != null -> {
+                viewModelScope.launch {
+                    sendAction(
+                        PasskeyAction.Internal.UnlockResultReceive(
+                            vaultRepository.unlockVaultWithWebAuthnPrf(
+                                credentialId = result.credentialId,
+                                prfOutput = prfOutput,
+                            ),
+                        ),
+                    )
+                }
+            }
+
+            else -> showError(
+                BitwardenString.this_passkey_cannot_unlock_your_vault.asText(),
             )
         }
     }
@@ -261,10 +303,13 @@ enum class PasskeyMode {
  * Models the state of the passkey login and unlock flow.
  *
  * @property isUnlockAvailable Whether the active account has a passkey that can unlock the vault.
+ * @property isPinRequired Whether the last security key needed a PIN, so it is asked for before
+ * the key is tapped next time.
  * @property dialog The dialog to display, if any.
  */
 data class PasskeyState(
     val isUnlockAvailable: Boolean,
+    val isPinRequired: Boolean,
     val dialog: DialogState?,
 ) {
     /**
@@ -272,11 +317,14 @@ data class PasskeyState(
      */
     sealed class DialogState {
         /**
-         * Asks for the security key's PIN.
+         * Asks for the security key's PIN, keeping the pending [assertionRequest] if the key was
+         * already tapped.
          */
         data class EnterPin(
             val mode: PasskeyMode,
             val pin: String,
+            val assertionRequest: PasskeyAssertionRequest? = null,
+            val loginToken: String? = null,
         ) : DialogState()
 
         /**
@@ -284,7 +332,7 @@ data class PasskeyState(
          */
         data class WaitingForKey(
             val mode: PasskeyMode,
-            val pin: String,
+            val pin: String?,
             val assertionRequest: PasskeyAssertionRequest,
             val loginToken: String?,
         ) : DialogState()
@@ -343,7 +391,7 @@ sealed class PasskeyAction {
          * A passkey login challenge was received.
          */
         data class LoginRequestReceive(
-            val pin: String,
+            val pin: String?,
             val result: Result<PasskeyLoginRequest>,
         ) : Internal()
 

@@ -38,15 +38,15 @@ class PasskeyViewModelTest : BaseViewModelTest() {
         every { authRepository.getPasskeyUnlockRequest() } returns null
 
         assertEquals(
-            PasskeyState(isUnlockAvailable = false, dialog = null),
+            PasskeyState(isUnlockAvailable = false, isPinRequired = false, dialog = null),
             createViewModel().stateFlow.value,
         )
     }
 
     @Test
-    fun `unlock flow should unlock the vault with the PRF output of the tapped key`() {
+    fun `unlock with a key that verifies the user itself should not ask for a PIN`() {
         coEvery {
-            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
         } returns ASSERTION
         coEvery {
             vaultRepository.unlockVaultWithWebAuthnPrf(credentialId = "Y3JlZA", prfOutput = "cHJm")
@@ -54,12 +54,10 @@ class PasskeyViewModelTest : BaseViewModelTest() {
         val viewModel = createViewModel()
 
         viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
-        viewModel.trySendAction(PasskeyAction.PinChange("123456"))
-        viewModel.trySendAction(PasskeyAction.PinSubmit)
         assertEquals(
             PasskeyState.DialogState.WaitingForKey(
                 mode = PasskeyMode.UNLOCK,
-                pin = "123456",
+                pin = null,
                 assertionRequest = UNLOCK_REQUEST,
                 loginToken = null,
             ),
@@ -74,11 +72,55 @@ class PasskeyViewModelTest : BaseViewModelTest() {
     }
 
     @Test
+    fun `a key that needs a PIN should ask for it and then for the PIN first next time`() {
+        coEvery {
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
+        } returns PasskeyAssertionResult.PinRequired
+        coEvery {
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
+        } returns ASSERTION
+        coEvery {
+            vaultRepository.unlockVaultWithWebAuthnPrf(credentialId = "Y3JlZA", prfOutput = "cHJm")
+        } returns VaultUnlockResult.Success
+        val viewModel = createViewModel()
+
+        viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
+        viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
+        assertEquals(
+            PasskeyState(
+                isUnlockAvailable = true,
+                isPinRequired = true,
+                dialog = PasskeyState.DialogState.EnterPin(
+                    mode = PasskeyMode.UNLOCK,
+                    pin = "",
+                    assertionRequest = UNLOCK_REQUEST,
+                    loginToken = null,
+                ),
+            ),
+            viewModel.stateFlow.value,
+        )
+        viewModel.trySendAction(PasskeyAction.PinChange("123456"))
+        viewModel.trySendAction(PasskeyAction.PinSubmit)
+        viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
+
+        assertEquals(null, viewModel.stateFlow.value.dialog)
+        coVerify {
+            vaultRepository.unlockVaultWithWebAuthnPrf(credentialId = "Y3JlZA", prfOutput = "cHJm")
+        }
+
+        viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
+        assertEquals(
+            PasskeyState.DialogState.EnterPin(mode = PasskeyMode.UNLOCK, pin = ""),
+            viewModel.stateFlow.value.dialog,
+        )
+    }
+
+    @Test
     fun `login flow should log in with the assertion for the fetched challenge`() {
         val loginRequest = PasskeyLoginRequest(token = "token", assertionRequest = UNLOCK_REQUEST)
         coEvery { authRepository.getPasskeyLoginRequest() } returns loginRequest.asSuccess()
         coEvery {
-            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
         } returns ASSERTION
         coEvery {
             authRepository.loginWithPasskey(token = "token", assertion = ASSERTION)
@@ -86,8 +128,6 @@ class PasskeyViewModelTest : BaseViewModelTest() {
         val viewModel = createViewModel()
 
         viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.LOGIN))
-        viewModel.trySendAction(PasskeyAction.PinChange("123456"))
-        viewModel.trySendAction(PasskeyAction.PinSubmit)
         viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
 
         assertEquals(null, viewModel.stateFlow.value.dialog)
@@ -97,11 +137,15 @@ class PasskeyViewModelTest : BaseViewModelTest() {
     @Test
     fun `a wrong PIN should show the remaining attempts`() {
         coEvery {
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
+        } returns PasskeyAssertionResult.PinRequired
+        coEvery {
             yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "0000")
         } returns PasskeyAssertionResult.InvalidPin(retriesRemaining = 5)
         val viewModel = createViewModel()
 
         viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
+        viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
         viewModel.trySendAction(PasskeyAction.PinChange("0000"))
         viewModel.trySendAction(PasskeyAction.PinSubmit)
         viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
@@ -117,13 +161,11 @@ class PasskeyViewModelTest : BaseViewModelTest() {
     @Test
     fun `an assertion without PRF output should not attempt to unlock`() {
         coEvery {
-            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
         } returns ASSERTION.copy(prfOutput = null)
         val viewModel = createViewModel()
 
         viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
-        viewModel.trySendAction(PasskeyAction.PinChange("123456"))
-        viewModel.trySendAction(PasskeyAction.PinSubmit)
         viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
 
         assertEquals(

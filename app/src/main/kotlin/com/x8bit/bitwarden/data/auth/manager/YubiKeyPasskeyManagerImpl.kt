@@ -7,8 +7,8 @@ import com.x8bit.bitwarden.data.auth.manager.util.buildWebAuthnAssertionDeviceRe
 import com.x8bit.bitwarden.data.auth.manager.util.buildWebAuthnGetClientDataJson
 import com.x8bit.bitwarden.data.auth.manager.util.toBase64Url
 import com.x8bit.bitwarden.data.auth.repository.util.decodeBase64UrlOrNull
-import com.yubico.yubikit.core.YubiKeyDevice
 import com.yubico.yubikit.core.YubiKeyConnection
+import com.yubico.yubikit.core.YubiKeyDevice
 import com.yubico.yubikit.core.application.CommandException
 import com.yubico.yubikit.core.fido.FidoConnection
 import com.yubico.yubikit.core.smartcard.SmartCardConnection
@@ -17,7 +17,14 @@ import com.yubico.yubikit.fido.client.ClientError
 import com.yubico.yubikit.fido.client.Ctap2Client
 import com.yubico.yubikit.fido.client.MultipleAssertionsAvailable
 import com.yubico.yubikit.fido.client.clientdata.ClientDataProvider
+import com.yubico.yubikit.fido.client.extensions.Extension.AuthenticationProcessor
+import com.yubico.yubikit.fido.client.extensions.HmacSecretExtension
 import com.yubico.yubikit.fido.ctap.Ctap2Session
+import com.yubico.yubikit.fido.ctap.PinUvAuthDummyProtocol
+import com.yubico.yubikit.fido.ctap.PinUvAuthProtocol
+import com.yubico.yubikit.fido.ctap.PinUvAuthProtocolV1
+import com.yubico.yubikit.fido.ctap.PinUvAuthProtocolV2
+import com.yubico.yubikit.fido.ctap.UnsupportedPinUvAuthProtocolError
 import com.yubico.yubikit.fido.webauthn.AuthenticatorAssertionResponse
 import com.yubico.yubikit.fido.webauthn.Extensions
 import com.yubico.yubikit.fido.webauthn.PublicKeyCredential
@@ -41,7 +48,7 @@ class YubiKeyPasskeyManagerImpl(
     override suspend fun getAssertion(
         device: YubiKeyDevice,
         request: PasskeyAssertionRequest,
-        pin: String,
+        pin: String?,
     ): PasskeyAssertionResult = withContext(dispatcherManager.io) {
         try {
             device.openPreferredConnection().use { connection ->
@@ -55,10 +62,13 @@ class YubiKeyPasskeyManagerImpl(
             }
         } catch (e: ClientError) {
             Timber.w(e, "Security key rejected the passkey assertion")
-            if (e.errorCode == ClientError.Code.DEVICE_INELIGIBLE) {
-                PasskeyAssertionResult.NoCredentials
-            } else {
-                PasskeyAssertionResult.Error(error = e)
+            when (e.errorCode) {
+                ClientError.Code.DEVICE_INELIGIBLE -> PasskeyAssertionResult.NoCredentials
+                ClientError.Code.CONFIGURATION_UNSUPPORTED -> {
+                    PasskeyAssertionResult.UserVerificationUnavailable
+                }
+
+                else -> PasskeyAssertionResult.Error(error = e)
             }
         } catch (e: IOException) {
             PasskeyAssertionResult.Error(error = e)
@@ -66,18 +76,23 @@ class YubiKeyPasskeyManagerImpl(
             PasskeyAssertionResult.Error(error = e)
         } catch (e: IllegalArgumentException) {
             PasskeyAssertionResult.Error(error = e)
+        } catch (e: UnsupportedPinUvAuthProtocolError) {
+            PasskeyAssertionResult.Error(error = e)
         }
     }
 
     private fun getAssertion(
         connection: YubiKeyConnection,
         request: PasskeyAssertionRequest,
-        pin: String,
+        pin: String?,
     ): PasskeyAssertionResult {
         val session = when (connection) {
             is FidoConnection -> Ctap2Session(connection)
             is SmartCardConnection -> Ctap2Session(connection)
             else -> throw IOException("Unsupported connection")
+        }
+        if (pin == null && session.cachedInfo.options.requiresClientPin()) {
+            return PasskeyAssertionResult.PinRequired
         }
         val clientDataJson = buildWebAuthnGetClientDataJson(
             challenge = request.challenge,
@@ -100,11 +115,11 @@ class YubiKeyPasskeyManagerImpl(
             ),
         )
         val credential = try {
-            Ctap2Client(session).getAssertion(
+            Ctap2Client(session, listOf(PinlessHmacSecretExtension())).getAssertion(
                 ClientDataProvider.fromClientDataJson(clientDataJson),
                 options,
                 requireNotNull(URI(request.origin).host) { "Invalid origin" },
-                pin.toCharArray(),
+                pin?.toCharArray(),
                 null,
             )
         } catch (e: MultipleAssertionsAvailable) {
@@ -112,6 +127,43 @@ class YubiKeyPasskeyManagerImpl(
         }
         return credential.toAssertionResult()
     }
+}
+
+/**
+ * Whether user verification needs the client PIN: the authenticator has a PIN set and no built-in
+ * user verification of its own.
+ */
+internal fun Map<String, *>.requiresClientPin(): Boolean =
+    this["uv"] != true && this["clientPin"] == true
+
+/**
+ * The PIN/UV auth protocol to use for the hmac-secret key agreement, preferring version 2, or
+ * `null` if the authenticator supports neither.
+ */
+internal fun List<Int>.toPinUvAuthProtocolOrNull(): PinUvAuthProtocol? = when {
+    PinUvAuthProtocolV2.VERSION in this -> PinUvAuthProtocolV2()
+    PinUvAuthProtocolV1.VERSION in this -> PinUvAuthProtocolV1()
+    else -> null
+}
+
+/**
+ * hmac-secret for authenticators without a client PIN. yubikit only negotiates a PIN/UV auth
+ * protocol when the authenticator reports the `clientPin` option, but hmac-secret needs one for
+ * its key agreement either way, so fall back to the authenticator's advertised protocols.
+ */
+private class PinlessHmacSecretExtension : HmacSecretExtension() {
+    override fun getAssertion(
+        ctap: Ctap2Session,
+        options: PublicKeyCredentialRequestOptions,
+        pinUvAuthProtocol: PinUvAuthProtocol,
+    ): AuthenticationProcessor? = super.getAssertion(
+        ctap,
+        options,
+        pinUvAuthProtocol
+            .takeUnless { it is PinUvAuthDummyProtocol }
+            ?: ctap.cachedInfo.pinUvAuthProtocols.toPinUvAuthProtocolOrNull()
+            ?: pinUvAuthProtocol,
+    )
 }
 
 private fun YubiKeyDevice.openPreferredConnection(): YubiKeyConnection =

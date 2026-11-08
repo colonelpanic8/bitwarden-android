@@ -20,6 +20,18 @@ sealed class PasskeyAssertionResult {
     ) : PasskeyAssertionResult()
 
     /**
+     * The security key needs its PIN to verify the user, and no PIN was given. No assertion was
+     * attempted.
+     */
+    data object PinRequired : PasskeyAssertionResult()
+
+    /**
+     * The security key cannot verify the user: it has neither built-in user verification nor a
+     * PIN configured.
+     */
+    data object UserVerificationUnavailable : PasskeyAssertionResult()
+
+    /**
      * The PIN was wrong.
      */
     data class InvalidPin(val retriesRemaining: Int) : PasskeyAssertionResult()
