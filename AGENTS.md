@@ -1,0 +1,46 @@
+# Warden Key fork
+
+This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
+`.claude/CLAUDE.md`; this file covers only what the fork adds.
+
+## What the fork carries
+
+- Packaging: the `fdroid` flavor is shipped as `com.colonelpanic.wardenkey`
+  ("Warden Key"), with `fdroidDebug`/`fdroidRelease` resource overrides. The
+  `standard` flavor keeps upstream's ID.
+- Release signing from `keystore.properties` (written by CI) and
+  `.github/workflows/fork-release.yml` / `fork-ci.yml`.
+- YubiKey passkey login and PRF unlock:
+  - `network`: `IdentityTokenAuthModel.WebAuthn`, assertion-options endpoint,
+    `WebAuthnPrfDecryptionOptionJson` in token and sync decryption options.
+  - `app/.../data/auth/manager/YubiKeyPasskeyManager*`: yubikit-android CTAP2
+    assertion with the PRF extension.
+  - `app/.../data/auth/repository/util/WebAuthnPrfExtensions.kt`: PRF key
+    stretching and key set decryption. The SDK then decapsulates the user key
+    through `InitUserCryptoMethod.AuthRequest`.
+  - `app/.../ui/auth/feature/passkey/`: the self-contained button, dialogs and
+    ViewModel. Screens receive the buttons as slot parameters from their
+    navigation destinations.
+
+Keep fork changes small and additive so they rebase onto upstream `main`.
+
+## Invariants
+
+- Never change the release signing key. It lives in `pass` at
+  `signing/bitwarden-android-release` and in the repository's
+  `ANDROID_KEYSTORE_*` / `ANDROID_KEY_*` secrets. Never commit keystores or
+  passwords.
+- The PRF output is secret: never log it or send it to the server. The
+  `deviceResponse` sent to the server carries no client extension results.
+- Release tags are `vYYYY.M.P-wk.N` (upstream version plus fork release
+  number). The workflow derives `versionCode` from the tag.
+
+## Checks
+
+`nix develop` (or direnv) provides JDK 21 and the Android SDK. Gradle needs a
+GitHub token with `read:packages` for the Bitwarden SDK (`GITHUB_TOKEN`, or
+`gitHubToken` in `user.properties`).
+
+- `just build`: debug APK (`:app:assembleFdroidDebug`)
+- `just lint`: detekt (autocorrects formatting)
+- `just test '<filter>'`: app unit tests, e.g. `'*Passkey*'`
