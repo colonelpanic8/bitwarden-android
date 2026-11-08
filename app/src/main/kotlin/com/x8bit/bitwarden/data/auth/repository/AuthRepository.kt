@@ -8,6 +8,8 @@ import com.x8bit.bitwarden.data.auth.manager.AuthStateManager
 import com.x8bit.bitwarden.data.auth.manager.KdfManager
 import com.x8bit.bitwarden.data.auth.manager.OrganizationManager
 import com.x8bit.bitwarden.data.auth.manager.UserStateManager
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionRequest
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionResult
 import com.x8bit.bitwarden.data.auth.repository.model.BreachCountResult
 import com.x8bit.bitwarden.data.auth.repository.model.DeleteAccountResult
 import com.x8bit.bitwarden.data.auth.repository.model.EmailTokenResult
@@ -16,6 +18,7 @@ import com.x8bit.bitwarden.data.auth.repository.model.KnownDeviceResult
 import com.x8bit.bitwarden.data.auth.repository.model.LoginResult
 import com.x8bit.bitwarden.data.auth.repository.model.LogoutReason
 import com.x8bit.bitwarden.data.auth.repository.model.NewSsoUserResult
+import com.x8bit.bitwarden.data.auth.repository.model.PasskeyLoginRequest
 import com.x8bit.bitwarden.data.auth.repository.model.PasswordHintResult
 import com.x8bit.bitwarden.data.auth.repository.model.PrevalidateSsoResult
 import com.x8bit.bitwarden.data.auth.repository.model.RegisterResult
@@ -155,6 +158,26 @@ interface AuthRepository :
         email: String,
         password: String,
     ): LoginResult
+
+    /**
+     * Requests a challenge for logging in with a passkey on the current environment.
+     */
+    suspend fun getPasskeyLoginRequest(): Result<PasskeyLoginRequest>
+
+    /**
+     * Attempt to login with a passkey [assertion] for the challenge identified by [token]. When
+     * the passkey supports PRF, the vault is unlocked as well; otherwise it remains locked.
+     */
+    suspend fun loginWithPasskey(
+        token: String,
+        assertion: PasskeyAssertionResult.Success,
+    ): LoginResult
+
+    /**
+     * Returns the assertion parameters for unlocking the active account's vault with a passkey,
+     * or `null` if none of the account's passkeys can unlock it.
+     */
+    fun getPasskeyUnlockRequest(): PasskeyAssertionRequest?
 
     /**
      * Attempt to login with the given email and auth request ID and access code. The updated

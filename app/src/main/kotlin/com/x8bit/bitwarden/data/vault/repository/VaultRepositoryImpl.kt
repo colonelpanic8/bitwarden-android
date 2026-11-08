@@ -20,6 +20,10 @@ import com.bitwarden.vault.CipherType
 import com.bitwarden.vault.CipherView
 import com.bitwarden.vault.FolderView
 import com.x8bit.bitwarden.data.auth.datasource.disk.AuthDiskSource
+import com.x8bit.bitwarden.data.auth.repository.util.allWebAuthnPrfOptions
+import com.x8bit.bitwarden.data.auth.repository.util.decodeBase64UrlOrNull
+import com.x8bit.bitwarden.data.auth.repository.util.matchesCredential
+import com.x8bit.bitwarden.data.auth.repository.util.toInitUserCryptoMethod
 import com.x8bit.bitwarden.data.auth.repository.util.toSdkParams
 import com.x8bit.bitwarden.data.autofill.util.login
 import com.x8bit.bitwarden.data.platform.error.NoActiveUserException
@@ -422,6 +426,41 @@ internal class VaultRepositoryImpl(
                             error = MissingPropertyException("Pin protected key envelope"),
                         )
                 }
+            }
+    }
+
+    override suspend fun unlockVaultWithWebAuthnPrf(
+        credentialId: String,
+        prfOutput: String,
+    ): VaultUnlockResult {
+        val userId = activeUserId
+            ?: return VaultUnlockResult.InvalidStateError(error = NoActiveUserException())
+        val rawCredentialId = credentialId.decodeBase64UrlOrNull()
+        val prf = prfOutput.decodeBase64UrlOrNull()
+        val option = authDiskSource
+            .userState
+            ?.activeAccount
+            ?.profile
+            ?.userDecryptionOptions
+            ?.allWebAuthnPrfOptions
+            ?.firstOrNull { rawCredentialId != null && it.matchesCredential(rawCredentialId) }
+        if (option == null || prf == null) {
+            return VaultUnlockResult.InvalidStateError(
+                error = MissingPropertyException("WebAuthn PRF unlock option"),
+            )
+        }
+        val initUserCryptoMethod = option
+            .toInitUserCryptoMethod(prf = prf)
+            .getOrElse { return VaultUnlockResult.AuthenticationError(error = it) }
+        return this
+            .unlockVaultForUser(
+                userId = userId,
+                initUserCryptoMethod = initUserCryptoMethod,
+            )
+            .onVaultUnlockSuccess {
+                pinProtectedUserKeyManager.deriveTemporaryPinProtectedUserKeyIfNecessary(
+                    userId = userId,
+                )
             }
     }
 

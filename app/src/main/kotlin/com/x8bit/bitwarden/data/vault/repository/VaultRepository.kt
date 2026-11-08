@@ -135,6 +135,15 @@ interface VaultRepository :
     ): VaultUnlockResult
 
     /**
+     * Attempt to unlock the vault for the currently active user with the base64url-encoded
+     * [prfOutput] of the passkey identified by [credentialId].
+     */
+    suspend fun unlockVaultWithWebAuthnPrf(
+        credentialId: String,
+        prfOutput: String,
+    ): VaultUnlockResult
+
+    /**
      * Attempt to get the verification code and the period.
      */
     suspend fun generateTotp(cipherId: String, time: Instant): GenerateTotpResult

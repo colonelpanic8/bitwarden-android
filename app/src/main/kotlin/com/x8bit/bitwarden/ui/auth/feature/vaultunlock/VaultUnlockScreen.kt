@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
@@ -84,6 +85,7 @@ private const val AUTO_FOCUS_DELAY = 575L
 @Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun VaultUnlockScreen(
+    passkeyUnlockButton: @Composable (Modifier) -> Unit = {},
     viewModel: VaultUnlockViewModel = hiltViewModel(),
     biometricsManager: BiometricsManager = LocalBiometricsManager.current,
     focusManager: FocusManager = LocalFocusManager.current,
@@ -336,6 +338,12 @@ fun VaultUnlockScreen(
                         .fillMaxWidth(),
                 )
             }
+            passkeyUnlockButton(
+                Modifier
+                    .padding(top = 12.dp)
+                    .standardHorizontalMargin()
+                    .fillMaxWidth(),
+            )
             Spacer(modifier = Modifier.navigationBarsPadding())
         }
     }

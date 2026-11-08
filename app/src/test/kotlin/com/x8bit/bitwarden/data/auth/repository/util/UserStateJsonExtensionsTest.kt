@@ -12,6 +12,7 @@ import com.bitwarden.network.model.OrganizationType
 import com.bitwarden.network.model.TrustedDeviceUserDecryptionOptionsJson
 import com.bitwarden.network.model.UserDecryptionJson
 import com.bitwarden.network.model.UserDecryptionOptionsJson
+import com.bitwarden.network.model.WebAuthnPrfDecryptionOptionJson
 import com.bitwarden.network.model.createMockOrganizationNetwork
 import com.bitwarden.network.model.createMockPermissions
 import com.bitwarden.network.model.createMockProfile
@@ -2160,6 +2161,77 @@ class UserStateJsonExtensionsTest {
                 ),
             ),
             originalUserState.toUpdatedUserStateJson(syncResponse),
+        )
+    }
+
+    @Test
+    fun `toUpdatedUserStateJson should replace passkey unlock options with the synced ones`() {
+        val loginOption = WebAuthnPrfDecryptionOptionJson(
+            credentialId = "bG9naW4",
+            transports = null,
+            encryptedPrivateKey = "2.login",
+            encryptedUserKey = "4.login",
+        )
+        val syncedOption = loginOption.copy(credentialId = "c3luY2Vk")
+        val profile = AccountJson.Profile(
+            userId = "activeUserId",
+            email = "email",
+            isEmailVerified = true,
+            name = "name",
+            stamp = null,
+            organizationId = null,
+            avatarColorHex = null,
+            hasPremiumPersonally = true,
+            hasPremiumFromOrganization = null,
+            forcePasswordResetReason = null,
+            kdfType = KdfTypeJson.PBKDF2_SHA256,
+            kdfIterations = 600000,
+            kdfMemory = null,
+            kdfParallelism = null,
+            userDecryptionOptions = UserDecryptionOptionsJson(
+                hasMasterPassword = true,
+                trustedDeviceUserDecryptionOptions = null,
+                keyConnectorUserDecryptionOptions = null,
+                masterPasswordUnlock = null,
+                webAuthnPrfOption = loginOption,
+            ),
+            isTwoFactorEnabled = false,
+            creationDate = Instant.parse("2024-09-13T01:00:00.00Z"),
+        )
+        val userState = UserStateJson(
+            activeUserId = "activeUserId",
+            accounts = mapOf(
+                "activeUserId" to AccountJson(
+                    profile = profile,
+                    tokens = null,
+                    settings = AccountJson.Settings(environmentUrlData = null),
+                ),
+            ),
+        )
+        val syncResponse = createMockSyncResponse(
+            number = 1,
+            profile = createMockProfile(number = 1, id = "activeUserId"),
+            userDecryption = UserDecryptionJson(
+                masterPasswordUnlock = MOCK_MASTER_PASSWORD_UNLOCK_DATA,
+                v2UpgradeToken = null,
+                webAuthnPrfOptions = listOf(syncedOption),
+            ),
+        )
+
+        assertEquals(
+            UserDecryptionOptionsJson(
+                hasMasterPassword = true,
+                trustedDeviceUserDecryptionOptions = null,
+                keyConnectorUserDecryptionOptions = null,
+                masterPasswordUnlock = MOCK_MASTER_PASSWORD_UNLOCK_DATA,
+                webAuthnPrfOption = null,
+                webAuthnPrfOptions = listOf(syncedOption),
+            ),
+            userState
+                .toUpdatedUserStateJson(syncResponse)
+                .activeAccount
+                .profile
+                .userDecryptionOptions,
         )
     }
 

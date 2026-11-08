@@ -46,12 +46,15 @@ fun UserStateJson.toUpdatedUserStateJson(
                 ?.copy(
                     hasMasterPassword = syncUserDecryption.masterPasswordUnlock != null,
                     masterPasswordUnlock = syncUserDecryption.masterPasswordUnlock,
+                    webAuthnPrfOption = null,
+                    webAuthnPrfOptions = syncUserDecryption.webAuthnPrfOptions,
                 )
                 ?: UserDecryptionOptionsJson(
                     hasMasterPassword = syncUserDecryption.masterPasswordUnlock != null,
                     trustedDeviceUserDecryptionOptions = null,
                     keyConnectorUserDecryptionOptions = null,
                     masterPasswordUnlock = syncUserDecryption.masterPasswordUnlock,
+                    webAuthnPrfOptions = syncUserDecryption.webAuthnPrfOptions,
                 )
         }
         ?: profile

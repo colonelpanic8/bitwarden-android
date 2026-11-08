@@ -67,6 +67,7 @@ import com.bitwarden.network.model.VerificationCodeResponseJson
 import com.bitwarden.network.model.VerifiedOrganizationDomainSsoDetailsResponse
 import com.bitwarden.network.model.VerifyEmailTokenRequestJson
 import com.bitwarden.network.model.VerifyEmailTokenResponseJson
+import com.bitwarden.network.model.WebAuthnPrfDecryptionOptionJson
 import com.bitwarden.network.model.createMockAccountKeysJson
 import com.bitwarden.network.model.createMockAccountKeysJsonWithNullFields
 import com.bitwarden.network.service.AccountsService
@@ -96,6 +97,7 @@ import com.x8bit.bitwarden.data.auth.manager.UserStateManager
 import com.x8bit.bitwarden.data.auth.manager.model.AuthRequest
 import com.x8bit.bitwarden.data.auth.manager.model.MigrateExistingUserToKeyConnectorResult
 import com.x8bit.bitwarden.data.auth.manager.model.MigrateNewUserToKeyConnectorResult
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionResult
 import com.x8bit.bitwarden.data.auth.repository.model.BreachCountResult
 import com.x8bit.bitwarden.data.auth.repository.model.DeleteAccountResult
 import com.x8bit.bitwarden.data.auth.repository.model.DeviceInfo
@@ -127,6 +129,8 @@ import com.x8bit.bitwarden.data.auth.repository.util.CookieCallbackResult
 import com.x8bit.bitwarden.data.auth.repository.util.DuoCallbackTokenResult
 import com.x8bit.bitwarden.data.auth.repository.util.SsoCallbackResult
 import com.x8bit.bitwarden.data.auth.repository.util.WebAuthResult
+import com.x8bit.bitwarden.data.auth.repository.util.createAesCbcHmacEncStringForTest
+import com.x8bit.bitwarden.data.auth.repository.util.deriveWebAuthnPrfKey
 import com.x8bit.bitwarden.data.auth.repository.util.toKdfRequestModel
 import com.x8bit.bitwarden.data.auth.repository.util.toSdkParams
 import com.x8bit.bitwarden.data.auth.repository.util.toUserState
@@ -173,6 +177,7 @@ import org.junit.jupiter.api.assertDoesNotThrow
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.Base64
 import javax.net.ssl.SSLHandshakeException
 
 @Suppress("LargeClass")
@@ -3182,6 +3187,128 @@ class AuthRepositoryTest {
                 userStateManager.hasPendingAccountAddition = false
             }
         }
+
+    @Test
+    fun `loginWithPasskey should log in with the assertion and unlock with the PRF key set`() =
+        runTest {
+            val prf = ByteArray(size = 32) { (it + 1).toByte() }
+            val keySetPrivateKey = byteArrayOf(48, 1, 2, 3)
+            val successResponse = GET_TOKEN_WITH_ACCOUNT_KEYS_RESPONSE_SUCCESS.copy(
+                userDecryptionOptions = UserDecryptionOptionsJson(
+                    hasMasterPassword = true,
+                    masterPasswordUnlock = null,
+                    trustedDeviceUserDecryptionOptions = null,
+                    keyConnectorUserDecryptionOptions = null,
+                    webAuthnPrfOption = WebAuthnPrfDecryptionOptionJson(
+                        credentialId = "Y3JlZA",
+                        transports = null,
+                        encryptedPrivateKey = createAesCbcHmacEncStringForTest(
+                            plaintext = keySetPrivateKey,
+                            key = deriveWebAuthnPrfKey(prf),
+                        ),
+                        encryptedUserKey = "4.encapsulatedUserKey",
+                    ),
+                ),
+            )
+            val authModel = IdentityTokenAuthModel.WebAuthn(
+                webAuthnToken = "challenge-token",
+                webAuthnDeviceResponse = "deviceResponse",
+            )
+            val initUserCryptoMethod = InitUserCryptoMethod.AuthRequest(
+                requestPrivateKey = Base64.getEncoder().encodeToString(keySetPrivateKey),
+                method = AuthRequestMethod.UserKey(protectedUserKey = "4.encapsulatedUserKey"),
+            )
+            coEvery {
+                identityService.getToken(
+                    email = "",
+                    authModel = authModel,
+                    uniqueAppId = UNIQUE_APP_ID,
+                    deeplinkScheme = DEEPLINK_SCHEME,
+                )
+            } returns successResponse.asSuccess()
+            coEvery { vaultRepository.syncIfNecessary() } just runs
+            every {
+                successResponse.toUserState(
+                    previousUserState = null,
+                    environmentUrlData = EnvironmentUrlDataJson.DEFAULT_US,
+                    passwordPassesPolicy = true,
+                )
+            } returns SINGLE_USER_STATE_1
+            coEvery {
+                vaultRepository.unlockVault(
+                    accountCryptographicState = ACCOUNT_CRYPTOGRAPHIC_STATE_V2,
+                    userId = USER_ID_1,
+                    email = EMAIL,
+                    kdf = ACCOUNT_1.profile.toSdkParams(),
+                    initUserCryptoMethod = initUserCryptoMethod,
+                    organizationKeys = null,
+                )
+            } returns VaultUnlockResult.Success
+
+            val result = repository.loginWithPasskey(
+                token = "challenge-token",
+                assertion = PasskeyAssertionResult.Success(
+                    credentialId = "Y3JlZA",
+                    deviceResponse = "deviceResponse",
+                    prfOutput = Base64.getUrlEncoder().withoutPadding().encodeToString(prf),
+                ),
+            )
+
+            assertEquals(LoginResult.Success, result)
+            coVerify(exactly = 1) {
+                vaultRepository.unlockVault(
+                    accountCryptographicState = ACCOUNT_CRYPTOGRAPHIC_STATE_V2,
+                    userId = USER_ID_1,
+                    email = EMAIL,
+                    kdf = ACCOUNT_1.profile.toSdkParams(),
+                    initUserCryptoMethod = initUserCryptoMethod,
+                    organizationKeys = null,
+                )
+            }
+            fakeAuthDiskSource.assertUserState(userState = SINGLE_USER_STATE_1)
+        }
+
+    @Test
+    fun `getPasskeyUnlockRequest should target the stored passkeys on the vault origin`() {
+        fakeEnvironmentRepository.environment = Environment.SelfHosted(
+            environmentUrlData = EnvironmentUrlDataJson(base = "https://vault.example.com:8222"),
+        )
+        val option = WebAuthnPrfDecryptionOptionJson(
+            credentialId = "Y3JlZA",
+            transports = null,
+            encryptedPrivateKey = "2.key",
+            encryptedUserKey = "4.key",
+        )
+        fakeAuthDiskSource.userState = SINGLE_USER_STATE_1.copy(
+            accounts = mapOf(
+                USER_ID_1 to ACCOUNT_1.copy(
+                    profile = ACCOUNT_1.profile.copy(
+                        userDecryptionOptions = UserDecryptionOptionsJson(
+                            hasMasterPassword = true,
+                            masterPasswordUnlock = null,
+                            trustedDeviceUserDecryptionOptions = null,
+                            keyConnectorUserDecryptionOptions = null,
+                            webAuthnPrfOptions = listOf(option),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val request = repository.getPasskeyUnlockRequest()
+
+        assertEquals("vault.example.com", request?.relyingPartyId)
+        assertEquals("https://vault.example.com:8222", request?.origin)
+        assertEquals(listOf("Y3JlZA"), request?.allowCredentialIds)
+        assertEquals("l7AG39jbWXuJLJpQNDtSSLpsMoBZ74Es7DR84Nd0OQs", request?.prfSalt)
+    }
+
+    @Test
+    fun `getPasskeyUnlockRequest should return null without passkey unlock options`() {
+        fakeAuthDiskSource.userState = SINGLE_USER_STATE_1
+
+        assertNull(repository.getPasskeyUnlockRequest())
+    }
 
     @Test
     @Suppress("MaxLineLength")

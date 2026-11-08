@@ -17,6 +17,7 @@ import com.bitwarden.core.data.util.flatMap
 import com.bitwarden.crypto.HashPurpose
 import com.bitwarden.crypto.Kdf
 import com.bitwarden.data.datasource.disk.ConfigDiskSource
+import com.bitwarden.data.repository.util.baseWebVaultUrlOrDefault
 import com.bitwarden.data.repository.util.toEnvironmentUrls
 import com.bitwarden.data.repository.util.toEnvironmentUrlsOrDefault
 import com.bitwarden.network.model.AccountKeysJson
@@ -71,6 +72,10 @@ import com.x8bit.bitwarden.data.auth.manager.TrustedDeviceManager
 import com.x8bit.bitwarden.data.auth.manager.UserLogoutManager
 import com.x8bit.bitwarden.data.auth.manager.UserStateManager
 import com.x8bit.bitwarden.data.auth.manager.model.MigrateExistingUserToKeyConnectorResult
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionRequest
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionResult
+import com.x8bit.bitwarden.data.auth.manager.util.toBase64Url
+import com.x8bit.bitwarden.data.auth.manager.util.toWebAuthnOriginOrNull
 import com.x8bit.bitwarden.data.auth.repository.model.BreachCountResult
 import com.x8bit.bitwarden.data.auth.repository.model.DeleteAccountResult
 import com.x8bit.bitwarden.data.auth.repository.model.EmailTokenResult
@@ -79,6 +84,7 @@ import com.x8bit.bitwarden.data.auth.repository.model.KnownDeviceResult
 import com.x8bit.bitwarden.data.auth.repository.model.LoginResult
 import com.x8bit.bitwarden.data.auth.repository.model.LogoutReason
 import com.x8bit.bitwarden.data.auth.repository.model.NewSsoUserResult
+import com.x8bit.bitwarden.data.auth.repository.model.PasskeyLoginRequest
 import com.x8bit.bitwarden.data.auth.repository.model.PasswordHintResult
 import com.x8bit.bitwarden.data.auth.repository.model.PasswordStrengthResult
 import com.x8bit.bitwarden.data.auth.repository.model.PrevalidateSsoResult
@@ -100,14 +106,18 @@ import com.x8bit.bitwarden.data.auth.repository.util.CookieCallbackResult
 import com.x8bit.bitwarden.data.auth.repository.util.DuoCallbackTokenResult
 import com.x8bit.bitwarden.data.auth.repository.util.SsoCallbackResult
 import com.x8bit.bitwarden.data.auth.repository.util.WebAuthResult
+import com.x8bit.bitwarden.data.auth.repository.util.allWebAuthnPrfOptions
+import com.x8bit.bitwarden.data.auth.repository.util.decodeBase64UrlOrNull
 import com.x8bit.bitwarden.data.auth.repository.util.toAccountCryptographicState
 import com.x8bit.bitwarden.data.auth.repository.util.toDeviceInfo
+import com.x8bit.bitwarden.data.auth.repository.util.toInitUserCryptoMethod
 import com.x8bit.bitwarden.data.auth.repository.util.toKdfRequestModel
 import com.x8bit.bitwarden.data.auth.repository.util.toPolicyInformation
 import com.x8bit.bitwarden.data.auth.repository.util.toSdkParams
 import com.x8bit.bitwarden.data.auth.repository.util.toUserState
 import com.x8bit.bitwarden.data.auth.repository.util.updateForcePasswordReset
 import com.x8bit.bitwarden.data.auth.repository.util.updateMasterPasswordUnlock
+import com.x8bit.bitwarden.data.auth.repository.util.webAuthnPrfLoginSalt
 import com.x8bit.bitwarden.data.auth.util.KdfParamsConstants.DEFAULT_PBKDF2_ITERATIONS
 import com.x8bit.bitwarden.data.auth.util.YubiKeyResult
 import com.x8bit.bitwarden.data.auth.util.toSdkParams
@@ -137,6 +147,8 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import timber.log.Timber
+import java.net.URI
+import java.security.SecureRandom
 import java.time.Clock
 import javax.inject.Singleton
 
@@ -564,6 +576,68 @@ internal class AuthRepositoryImpl(
             },
             onSuccess = { it },
         )
+
+    override suspend fun getPasskeyLoginRequest(): Result<PasskeyLoginRequest> {
+        val origin = environmentRepository
+            .environment
+            .baseWebVaultUrlOrDefault
+            .toWebAuthnOriginOrNull()
+            ?: return IllegalStateException("Invalid web vault URL").asFailure()
+        return identityService
+            .getWebAuthnLoginAssertionOptions()
+            .map { response ->
+                PasskeyLoginRequest(
+                    token = response.token,
+                    assertionRequest = PasskeyAssertionRequest(
+                        challenge = response.options.challenge,
+                        relyingPartyId = response.options.relyingPartyId,
+                        origin = origin,
+                        allowCredentialIds = emptyList(),
+                        prfSalt = webAuthnPrfLoginSalt.toBase64Url(),
+                        timeoutMillis = response.options.timeout,
+                    ),
+                )
+            }
+    }
+
+    override suspend fun loginWithPasskey(
+        token: String,
+        assertion: PasskeyAssertionResult.Success,
+    ): LoginResult = loginCommon(
+        // The account is identified by the passkey; the server ignores the username.
+        email = "",
+        authModel = IdentityTokenAuthModel.WebAuthn(
+            webAuthnToken = token,
+            webAuthnDeviceResponse = assertion.deviceResponse,
+        ),
+        webAuthnPrf = assertion.prfOutput?.decodeBase64UrlOrNull(),
+    )
+
+    override fun getPasskeyUnlockRequest(): PasskeyAssertionRequest? {
+        val credentialIds = authDiskSource
+            .userState
+            ?.activeAccount
+            ?.profile
+            ?.userDecryptionOptions
+            ?.allWebAuthnPrfOptions
+            ?.mapNotNull { it.credentialId }
+            ?.takeUnless { it.isEmpty() }
+            ?: return null
+        val origin = environmentRepository
+            .environment
+            .baseWebVaultUrlOrDefault
+            .toWebAuthnOriginOrNull()
+            ?: return null
+        return PasskeyAssertionRequest(
+            // The vault is unlocked locally, so the assertion itself is never verified.
+            challenge = ByteArray(size = 32).also { SecureRandom().nextBytes(it) }.toBase64Url(),
+            relyingPartyId = URI(origin).host,
+            origin = origin,
+            allowCredentialIds = credentialIds,
+            prfSalt = webAuthnPrfLoginSalt.toBase64Url(),
+            timeoutMillis = null,
+        )
+    }
 
     override suspend fun login(
         email: String,
@@ -1570,6 +1644,7 @@ internal class AuthRepositoryImpl(
         deviceData: DeviceDataModel? = null,
         orgIdentifier: String? = null,
         newDeviceOtp: String? = null,
+        webAuthnPrf: ByteArray? = null,
     ): LoginResult = identityService
         .getToken(
             uniqueAppId = authDiskSource.uniqueAppId,
@@ -1606,6 +1681,7 @@ internal class AuthRepositoryImpl(
                         deviceData = deviceData,
                         orgIdentifier = orgIdentifier,
                         userConfirmedKeyConnector = false,
+                        webAuthnPrf = webAuthnPrf,
                     )
 
                     is GetTokenResponseJson.Invalid -> {
@@ -1644,6 +1720,7 @@ internal class AuthRepositoryImpl(
         deviceData: DeviceDataModel?,
         orgIdentifier: String?,
         userConfirmedKeyConnector: Boolean,
+        webAuthnPrf: ByteArray? = null,
     ): LoginResult = userStateManager.userStateTransaction {
         val passwordPolicyInfo = loginResponse.masterPasswordPolicyOptions?.toPolicyInformation()
         val userStateJson = loginResponse.toUserState(
@@ -1707,6 +1784,12 @@ internal class AuthRepositoryImpl(
                     keyConnectorUrl = keyConnectorUrl,
                     orgIdentifier = orgIdentifier,
                     loginResponse = loginResponse,
+                )
+            } else if (webAuthnPrf != null) {
+                unlockVaultWithWebAuthnPrfOnLoginSuccess(
+                    loginResponse = loginResponse,
+                    profile = profile,
+                    prf = webAuthnPrf,
                 )
             } else {
                 unlockVaultWithPasswordOnLoginSuccess(
@@ -1898,6 +1981,32 @@ internal class AuthRepositoryImpl(
             masterPasswordUnlock = masterPasswordUnlock.toSdkMasterPasswordUnlock(),
         )
 
+        return unlockVault(
+            accountCryptographicState = loginResponse.accountKeys.toAccountCryptographicState(
+                privateKey = privateKey,
+            ),
+            accountProfile = profile,
+            initUserCryptoMethod = initUserCryptoMethod,
+        )
+    }
+
+    /**
+     * Attempt to unlock the current user's vault with the PRF output of the passkey used to log in.
+     * The vault is left locked if the passkey cannot unlock it.
+     */
+    private suspend fun unlockVaultWithWebAuthnPrfOnLoginSuccess(
+        loginResponse: GetTokenResponseJson.Success,
+        profile: AccountJson.Profile,
+        prf: ByteArray,
+    ): VaultUnlockResult? {
+        val privateKey = loginResponse.privateKeyOrNull() ?: return null
+        val initUserCryptoMethod = loginResponse
+            .userDecryptionOptions
+            ?.webAuthnPrfOption
+            ?.toInitUserCryptoMethod(prf = prf)
+            ?.onFailure { Timber.w(it, "Unable to decrypt the passkey's key set") }
+            ?.getOrNull()
+            ?: return null
         return unlockVault(
             accountCryptographicState = loginResponse.accountKeys.toAccountCryptographicState(
                 privateKey = privateKey,

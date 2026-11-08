@@ -8,6 +8,7 @@ import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.bitwarden.ui.platform.util.ParcelableRouteSerializer
+import com.x8bit.bitwarden.ui.auth.feature.passkey.PasskeyUnlockButton
 import com.x8bit.bitwarden.ui.auth.feature.vaultunlock.model.UnlockType
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
@@ -89,7 +90,9 @@ fun NavController.navigateToVaultUnlock(
  */
 fun NavGraphBuilder.vaultUnlockDestination() {
     composable<VaultUnlockRoute.Standard> {
-        VaultUnlockScreen()
+        VaultUnlockScreen(
+            passkeyUnlockButton = { PasskeyUnlockButton(modifier = it) },
+        )
     }
 }
 

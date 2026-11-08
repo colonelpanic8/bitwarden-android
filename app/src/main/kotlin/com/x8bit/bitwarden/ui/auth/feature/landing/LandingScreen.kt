@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +68,7 @@ fun LandingScreen(
     onNavigateToEnvironment: () -> Unit,
     onNavigateToStartRegistration: () -> Unit,
     onNavigateToPreAuthSettings: () -> Unit,
+    passkeyLoginButton: @Composable (Modifier) -> Unit = {},
     viewModel: LandingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.stateFlow.collectAsStateWithLifecycle()
@@ -171,6 +173,7 @@ fun LandingScreen(
             onContinueClick = { viewModel.trySendAction(LandingAction.ContinueButtonClick) },
             onCreateAccountClick = { viewModel.trySendAction(LandingAction.CreateAccountClick) },
             onAppSettingsClick = { viewModel.trySendAction(LandingAction.AppSettingsClick) },
+            passkeyLoginButton = passkeyLoginButton,
         )
     }
 }
@@ -185,6 +188,7 @@ private fun LandingScreenContent(
     onContinueClick: () -> Unit,
     onCreateAccountClick: () -> Unit,
     onAppSettingsClick: () -> Unit,
+    passkeyLoginButton: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -268,6 +272,13 @@ private fun LandingScreenContent(
             isEnabled = state.isContinueButtonEnabled,
             modifier = Modifier
                 .testTag("ContinueButton")
+                .standardHorizontalMargin()
+                .fillMaxWidth(),
+        )
+
+        passkeyLoginButton(
+            Modifier
+                .padding(top = 12.dp)
                 .standardHorizontalMargin()
                 .fillMaxWidth(),
         )

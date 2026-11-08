@@ -4,6 +4,7 @@ import android.os.Build
 import android.security.KeyStoreException
 import app.cash.turbine.test
 import com.bitwarden.collections.CollectionView
+import com.bitwarden.core.AuthRequestMethod
 import com.bitwarden.core.InitUserCryptoMethod
 import com.bitwarden.core.MasterPasswordUnlockData
 import com.bitwarden.core.data.manager.dispatcher.DispatcherManager
@@ -20,6 +21,7 @@ import com.bitwarden.network.model.CipherTypeJson
 import com.bitwarden.network.model.MasterPasswordUnlockDataJson
 import com.bitwarden.network.model.SyncResponseJson
 import com.bitwarden.network.model.UserDecryptionOptionsJson
+import com.bitwarden.network.model.WebAuthnPrfDecryptionOptionJson
 import com.bitwarden.network.model.createMockCipher
 import com.bitwarden.network.model.createMockFolder
 import com.bitwarden.network.model.createMockOrganizationKeys
@@ -37,6 +39,8 @@ import com.x8bit.bitwarden.data.auth.datasource.disk.model.UserStateJson
 import com.x8bit.bitwarden.data.auth.datasource.disk.util.FakeAuthDiskSource
 import com.x8bit.bitwarden.data.auth.datasource.sdk.util.toKdfRequestModel
 import com.x8bit.bitwarden.data.auth.repository.model.createMockWrappedAccountCryptographicState
+import com.x8bit.bitwarden.data.auth.repository.util.createAesCbcHmacEncStringForTest
+import com.x8bit.bitwarden.data.auth.repository.util.deriveWebAuthnPrfKey
 import com.x8bit.bitwarden.data.auth.repository.util.toSdkParams
 import com.x8bit.bitwarden.data.platform.error.NoActiveUserException
 import com.x8bit.bitwarden.data.platform.manager.FeatureFlagManager
@@ -90,6 +94,7 @@ import org.junit.jupiter.api.Test
 import java.security.GeneralSecurityException
 import java.security.InvalidKeyException
 import java.time.Instant
+import java.util.Base64
 import javax.crypto.BadPaddingException
 import javax.crypto.Cipher
 import javax.crypto.IllegalBlockSizeException
@@ -836,6 +841,106 @@ class VaultRepositoryTest {
                     organizationKeys = createMockOrganizationKeys(number = 1),
                 )
             }
+        }
+
+    @Test
+    fun `unlockVaultWithWebAuthnPrf should unlock with the matching passkey key set`() =
+        runTest {
+            val userId = "mockId-1"
+            val prf = ByteArray(size = 32) { (it + 1).toByte() }
+            val keySetPrivateKey = byteArrayOf(48, 1, 2, 3)
+            prepareStateForUnlocking(unlockResult = VaultUnlockResult.Success)
+            fakeAuthDiskSource.userState = MOCK_USER_STATE.withWebAuthnPrfOptions(
+                WebAuthnPrfDecryptionOptionJson(
+                    credentialId = "b3RoZXI",
+                    transports = null,
+                    encryptedPrivateKey = "2.other",
+                    encryptedUserKey = "4.other",
+                ),
+                WebAuthnPrfDecryptionOptionJson(
+                    credentialId = "Y3JlZA",
+                    transports = null,
+                    encryptedPrivateKey = createAesCbcHmacEncStringForTest(
+                        plaintext = keySetPrivateKey,
+                        key = deriveWebAuthnPrfKey(prf),
+                    ),
+                    encryptedUserKey = "4.encapsulatedUserKey",
+                ),
+            )
+            val initUserCryptoMethod = InitUserCryptoMethod.AuthRequest(
+                requestPrivateKey = Base64.getEncoder().encodeToString(keySetPrivateKey),
+                method = AuthRequestMethod.UserKey(protectedUserKey = "4.encapsulatedUserKey"),
+            )
+            coEvery {
+                vaultLockManager.unlockVault(
+                    accountCryptographicState = MOCK_ACCOUNT_CRYPTOGRAPHIC_STATE,
+                    userId = userId,
+                    email = "email",
+                    kdf = MOCK_PROFILE.toSdkParams(),
+                    initUserCryptoMethod = initUserCryptoMethod,
+                    organizationKeys = createMockOrganizationKeys(number = 1),
+                )
+            } returns VaultUnlockResult.Success
+
+            val result = vaultRepository.unlockVaultWithWebAuthnPrf(
+                credentialId = "Y3JlZA",
+                prfOutput = Base64.getUrlEncoder().withoutPadding().encodeToString(prf),
+            )
+
+            assertEquals(VaultUnlockResult.Success, result)
+            coVerify {
+                vaultLockManager.unlockVault(
+                    accountCryptographicState = MOCK_ACCOUNT_CRYPTOGRAPHIC_STATE,
+                    userId = userId,
+                    email = "email",
+                    kdf = MOCK_PROFILE.toSdkParams(),
+                    initUserCryptoMethod = initUserCryptoMethod,
+                    organizationKeys = createMockOrganizationKeys(number = 1),
+                )
+                pinProtectedUserKeyManager.deriveTemporaryPinProtectedUserKeyIfNecessary(
+                    userId = userId,
+                )
+            }
+        }
+
+    @Test
+    fun `unlockVaultWithWebAuthnPrf with the wrong PRF output should return AuthenticationError`() =
+        runTest {
+            prepareStateForUnlocking(unlockResult = VaultUnlockResult.Success)
+            fakeAuthDiskSource.userState = MOCK_USER_STATE.withWebAuthnPrfOptions(
+                WebAuthnPrfDecryptionOptionJson(
+                    credentialId = "Y3JlZA",
+                    transports = null,
+                    encryptedPrivateKey = createAesCbcHmacEncStringForTest(
+                        plaintext = byteArrayOf(1),
+                        key = deriveWebAuthnPrfKey(ByteArray(size = 32) { 1 }),
+                    ),
+                    encryptedUserKey = "4.encapsulatedUserKey",
+                ),
+            )
+
+            val result = vaultRepository.unlockVaultWithWebAuthnPrf(
+                credentialId = "Y3JlZA",
+                prfOutput = Base64.getUrlEncoder().encodeToString(ByteArray(size = 32) { 2 }),
+            )
+
+            assertTrue(result is VaultUnlockResult.AuthenticationError)
+            coVerify(exactly = 0) {
+                vaultLockManager.unlockVault(any(), any(), any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `unlockVaultWithWebAuthnPrf with an unknown passkey should return InvalidStateError`() =
+        runTest {
+            fakeAuthDiskSource.userState = MOCK_USER_STATE
+
+            val result = vaultRepository.unlockVaultWithWebAuthnPrf(
+                credentialId = "Y3JlZA",
+                prfOutput = "AQID",
+            )
+
+            assertTrue(result is VaultUnlockResult.InvalidStateError)
         }
 
     @Test
@@ -2147,4 +2252,18 @@ private val MOCK_MASTER_PASSWORD_UNLOCK_DATA = MasterPasswordUnlockDataJson(
 
 private val MOCK_ACCOUNT_CRYPTOGRAPHIC_STATE = createMockWrappedAccountCryptographicState(
     number = 1,
+)
+
+private fun UserStateJson.withWebAuthnPrfOptions(
+    vararg options: WebAuthnPrfDecryptionOptionJson,
+): UserStateJson = copy(
+    accounts = accounts.mapValues { (_, account) ->
+        account.copy(
+            profile = account.profile.copy(
+                userDecryptionOptions = account.profile.userDecryptionOptions?.copy(
+                    webAuthnPrfOptions = options.toList(),
+                ),
+            ),
+        )
+    },
 )

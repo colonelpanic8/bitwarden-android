@@ -4,6 +4,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavOptions
 import com.bitwarden.ui.platform.base.util.composableWithStayTransitions
+import com.x8bit.bitwarden.ui.auth.feature.passkey.PasskeyLoginButton
 import kotlinx.serialization.Serializable
 
 /**
@@ -34,6 +35,7 @@ fun NavGraphBuilder.landingDestination(
             onNavigateToEnvironment = onNavigateToEnvironment,
             onNavigateToStartRegistration = onNavigateToStartRegistration,
             onNavigateToPreAuthSettings = onNavigateToPreAuthSettings,
+            passkeyLoginButton = { PasskeyLoginButton(modifier = it) },
         )
     }
 }
