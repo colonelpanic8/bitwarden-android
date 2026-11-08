@@ -13,6 +13,8 @@ import kotlinx.serialization.json.JsonNames
  * @property trustedDeviceUserDecryptionOptions Decryption options related to a user's trusted
  * device.
  * @property keyConnectorUserDecryptionOptions Decryption options related to a user's key connector.
+ * @property webAuthnPrfOption The passkey used to log in, if it can unlock the vault with PRF.
+ * @property webAuthnPrfOptions The user's passkeys that can unlock the vault with PRF, from sync.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -32,4 +34,12 @@ data class UserDecryptionOptionsJson(
     @SerialName("keyConnectorOption")
     @JsonNames("KeyConnectorOption")
     val keyConnectorUserDecryptionOptions: KeyConnectorUserDecryptionOptionsJson?,
+
+    @SerialName("webAuthnPrfOption")
+    @JsonNames("WebAuthnPrfOption")
+    val webAuthnPrfOption: WebAuthnPrfDecryptionOptionJson? = null,
+
+    @SerialName("webAuthnPrfOptions")
+    @JsonNames("WebAuthnPrfOptions")
+    val webAuthnPrfOptions: List<WebAuthnPrfDecryptionOptionJson>? = null,
 )

@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
  * used to decrypt their vault.
  * @property v2UpgradeToken The V2 upgrade token returned when available, allowing vault unlock
  * after V1 → V2 upgrade.
+ * @property webAuthnPrfOptions The user's passkeys that can unlock the vault with PRF.
  */
 @Serializable
 data class UserDecryptionJson(
@@ -18,4 +19,7 @@ data class UserDecryptionJson(
 
     @SerialName("v2UpgradeToken")
     val v2UpgradeToken: V2UpgradeTokenJson?,
+
+    @SerialName("webAuthnPrfOptions")
+    val webAuthnPrfOptions: List<WebAuthnPrfDecryptionOptionJson>? = null,
 )

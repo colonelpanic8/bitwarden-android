@@ -12,6 +12,7 @@ import com.bitwarden.network.model.SendVerificationEmailResponseJson
 import com.bitwarden.network.model.TwoFactorDataModel
 import com.bitwarden.network.model.VerifyEmailTokenRequestJson
 import com.bitwarden.network.model.VerifyEmailTokenResponseJson
+import com.bitwarden.network.model.WebAuthnLoginAssertionOptionsResponseJson
 
 /**
  * Provides an API for querying identity endpoints.
@@ -42,6 +43,12 @@ interface IdentityService {
         twoFactorData: TwoFactorDataModel? = null,
         newDeviceOtp: String? = null,
     ): Result<GetTokenResponseJson>
+
+    /**
+     * Requests a challenge for logging in with a discoverable passkey.
+     */
+    suspend fun getWebAuthnLoginAssertionOptions():
+        Result<WebAuthnLoginAssertionOptionsResponseJson>
 
     /**
      * Prevalidates the organization identifier used in an SSO request.

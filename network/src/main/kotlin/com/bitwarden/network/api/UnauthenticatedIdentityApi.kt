@@ -10,6 +10,7 @@ import com.bitwarden.network.model.RegisterFinishRequestJson
 import com.bitwarden.network.model.RegisterResponseJson
 import com.bitwarden.network.model.SendVerificationEmailRequestJson
 import com.bitwarden.network.model.VerifyEmailTokenRequestJson
+import com.bitwarden.network.model.WebAuthnLoginAssertionOptionsResponseJson
 import kotlinx.serialization.json.JsonPrimitive
 import retrofit2.Call
 import retrofit2.http.Body
@@ -30,7 +31,7 @@ internal interface UnauthenticatedIdentityApi {
     suspend fun getToken(
         @Field(value = "scope", encoded = true) scope: String,
         @Field(value = "client_id") clientId: String,
-        @Field(value = "username") email: String,
+        @Field(value = "username") email: String?,
         @Field(value = "password") passwordHash: String?,
         @Field(value = "deviceIdentifier") deviceIdentifier: String,
         @Field(value = "deviceName") deviceName: String,
@@ -45,7 +46,13 @@ internal interface UnauthenticatedIdentityApi {
         @Field(value = "authRequest") authRequestId: String?,
         @Field(value = "newDeviceOtp") newDeviceOtp: String?,
         @Field(value = "deeplinkScheme") deeplinkScheme: String,
+        @Field(value = "token") webAuthnToken: String?,
+        @Field(value = "deviceResponse") webAuthnDeviceResponse: String?,
     ): NetworkResult<GetTokenResponseJson.Success>
+
+    @GET("/accounts/webauthn/assertion-options")
+    suspend fun getWebAuthnLoginAssertionOptions():
+        NetworkResult<WebAuthnLoginAssertionOptionsResponseJson>
 
     @GET("/sso/prevalidate")
     suspend fun prevalidateSso(

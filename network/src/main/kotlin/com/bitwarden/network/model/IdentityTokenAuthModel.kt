@@ -40,6 +40,16 @@ sealed class IdentityTokenAuthModel {
     abstract val authRequestId: String?
 
     /**
+     * The token identifying the passkey login challenge.
+     */
+    open val webAuthnToken: String? get() = null
+
+    /**
+     * The passkey assertion, serialized as WebAuthn `PublicKeyCredential` JSON.
+     */
+    open val webAuthnDeviceResponse: String? get() = null
+
+    /**
      * The data for logging in with a username and password.
      */
     data class AuthRequest(
@@ -80,5 +90,21 @@ sealed class IdentityTokenAuthModel {
         override val authRequestId: String? get() = null
         override val username: String? get() = null
         override val password: String? get() = null
+    }
+
+    /**
+     * The data for logging in with a passkey.
+     */
+    data class WebAuthn(
+        override val webAuthnToken: String,
+        override val webAuthnDeviceResponse: String,
+    ) : IdentityTokenAuthModel() {
+        override val grantType: String get() = "webauthn"
+        override val authRequestId: String? get() = null
+        override val username: String? get() = null
+        override val password: String? get() = null
+        override val ssoCode: String? get() = null
+        override val ssoCodeVerifier: String? get() = null
+        override val ssoRedirectUri: String? get() = null
     }
 }

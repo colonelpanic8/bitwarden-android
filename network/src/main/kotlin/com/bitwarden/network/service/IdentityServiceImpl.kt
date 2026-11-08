@@ -14,6 +14,7 @@ import com.bitwarden.network.model.SendVerificationEmailResponseJson
 import com.bitwarden.network.model.TwoFactorDataModel
 import com.bitwarden.network.model.VerifyEmailTokenRequestJson
 import com.bitwarden.network.model.VerifyEmailTokenResponseJson
+import com.bitwarden.network.model.WebAuthnLoginAssertionOptionsResponseJson
 import com.bitwarden.network.model.toBitwardenError
 import com.bitwarden.network.util.DeviceModelProvider
 import com.bitwarden.network.util.NetworkErrorCode
@@ -50,7 +51,7 @@ internal class IdentityServiceImpl(
             deviceType = "0",
             grantType = authModel.grantType,
             passwordHash = authModel.password,
-            email = email,
+            email = email.takeUnless { it.isEmpty() },
             ssoCode = authModel.ssoCode,
             ssoCodeVerifier = authModel.ssoCodeVerifier,
             ssoRedirectUri = authModel.ssoRedirectUri,
@@ -60,6 +61,8 @@ internal class IdentityServiceImpl(
             authRequestId = authModel.authRequestId,
             newDeviceOtp = newDeviceOtp,
             deeplinkScheme = deeplinkScheme,
+            webAuthnToken = authModel.webAuthnToken,
+            webAuthnDeviceResponse = authModel.webAuthnDeviceResponse,
         )
         .toResult()
         .recoverCatching { throwable ->
@@ -75,6 +78,11 @@ internal class IdentityServiceImpl(
                 )
                 ?: throw throwable
         }
+
+    override suspend fun getWebAuthnLoginAssertionOptions():
+        Result<WebAuthnLoginAssertionOptionsResponseJson> = unauthenticatedIdentityApi
+        .getWebAuthnLoginAssertionOptions()
+        .toResult()
 
     override suspend fun prevalidateSso(
         organizationIdentifier: String,

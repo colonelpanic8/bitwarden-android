@@ -22,6 +22,8 @@ import com.bitwarden.network.model.TwoFactorAuthMethod
 import com.bitwarden.network.model.UserDecryptionOptionsJson
 import com.bitwarden.network.model.VerifyEmailTokenRequestJson
 import com.bitwarden.network.model.VerifyEmailTokenResponseJson
+import com.bitwarden.network.model.WebAuthnLoginAssertionOptionsResponseJson
+import com.bitwarden.network.model.WebAuthnPrfDecryptionOptionJson
 import com.bitwarden.network.model.createMockAccountKeysJson
 import com.bitwarden.network.util.DeviceModelProvider
 import io.mockk.every
@@ -32,9 +34,11 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import retrofit2.create
+import java.net.URLDecoder
 
 class IdentityServiceTest : BaseServiceTest() {
 
@@ -402,6 +406,72 @@ class IdentityServiceTest : BaseServiceTest() {
         assertTrue(result.isFailure)
     }
 
+    @Test
+    fun `getWebAuthnLoginAssertionOptions should parse the challenge and token`() = runTest {
+        server.enqueue(MockResponse().setBody(WEBAUTHN_ASSERTION_OPTIONS_JSON))
+
+        val result = identityService.getWebAuthnLoginAssertionOptions()
+
+        assertEquals(
+            WebAuthnLoginAssertionOptionsResponseJson(
+                options = WebAuthnLoginAssertionOptionsResponseJson.Options(
+                    challenge = "c2VydmVyLWNoYWxsZW5nZQ",
+                    relyingPartyId = "vault.example.com",
+                    timeout = 60000,
+                    userVerification = "required",
+                ),
+                token = "challenge-token",
+            )
+                .asSuccess(),
+            result,
+        )
+        assertEquals("/accounts/webauthn/assertion-options", server.takeRequest().path)
+    }
+
+    @Test
+    fun `getToken with WebAuthn should send the passkey grant and parse the PRF option`() =
+        runTest {
+            server.enqueue(MockResponse().setBody(WEBAUTHN_LOGIN_SUCCESS_JSON))
+
+            val result = identityService.getToken(
+                email = "",
+                authModel = IdentityTokenAuthModel.WebAuthn(
+                    webAuthnToken = "challenge-token",
+                    webAuthnDeviceResponse = """{"id":"Y3JlZA"}""",
+                ),
+                uniqueAppId = UNIQUE_APP_ID,
+                deeplinkScheme = DEEPLINK_SCHEME,
+            )
+
+            val fields = server
+                .takeRequest()
+                .body
+                .readUtf8()
+                .split('&')
+                .associate { field ->
+                    field.substringBefore('=') to URLDecoder.decode(
+                        field.substringAfter('='),
+                        Charsets.UTF_8,
+                    )
+                }
+            assertEquals("webauthn", fields["grant_type"])
+            assertEquals("challenge-token", fields["token"])
+            assertEquals("""{"id":"Y3JlZA"}""", fields["deviceResponse"])
+            assertFalse(fields.containsKey("username"))
+            assertFalse(fields.containsKey("password"))
+            assertEquals(
+                WebAuthnPrfDecryptionOptionJson(
+                    credentialId = "Y3JlZA",
+                    transports = listOf("nfc", "usb"),
+                    encryptedPrivateKey = "2.iv|data|mac",
+                    encryptedUserKey = "4.userKey",
+                ),
+                (result.getOrThrow() as GetTokenResponseJson.Success)
+                    .userDecryptionOptions
+                    ?.webAuthnPrfOption,
+            )
+        }
+
     companion object {
         private const val DEEPLINK_SCHEME = "deeplinkScheme"
         private const val UNIQUE_APP_ID = "testUniqueAppId"
@@ -636,3 +706,40 @@ private val SEND_VERIFICATION_EMAIL_REQUEST = SendVerificationEmailRequestJson(
     name = "Name Example",
     receiveMarketingEmails = true,
 )
+
+private const val WEBAUTHN_ASSERTION_OPTIONS_JSON = """
+{
+  "options": {
+    "challenge": "c2VydmVyLWNoYWxsZW5nZQ",
+    "timeout": 60000,
+    "rpId": "vault.example.com",
+    "allowCredentials": [],
+    "userVerification": "required"
+  },
+  "token": "challenge-token",
+  "object": "webAuthnLoginAssertionOptions"
+}
+"""
+
+private const val WEBAUTHN_LOGIN_SUCCESS_JSON = """
+{
+  "access_token": "accessToken",
+  "expires_in": 3600,
+  "token_type": "Bearer",
+  "refresh_token": "refreshToken",
+  "PrivateKey": "privateKey",
+  "Key": "key",
+  "Kdf": 0,
+  "KdfIterations": 600000,
+  "ForcePasswordReset": false,
+  "UserDecryptionOptions": {
+    "HasMasterPassword": true,
+    "WebAuthnPrfOption": {
+      "CredentialId": "Y3JlZA",
+      "Transports": ["nfc", "usb"],
+      "EncryptedPrivateKey": "2.iv|data|mac",
+      "EncryptedUserKey": "4.userKey"
+    }
+  }
+}
+"""
