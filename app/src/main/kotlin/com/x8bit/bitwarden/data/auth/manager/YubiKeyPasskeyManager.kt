@@ -11,8 +11,9 @@ interface YubiKeyPasskeyManager {
     /**
      * Gets an assertion for [request] from [device] and evaluates the PRF extension. User
      * verification is always required: keys with built-in user verification (such as a watch
-     * using its screen lock) verify the user themselves, while other keys need their [pin]. If a
-     * PIN is needed and [pin] is `null`, [PasskeyAssertionResult.PinRequired] is returned.
+     * using its screen lock) verify the user themselves and ignore [pin], while other keys need
+     * it. If a PIN is needed and [pin] is `null`, [PasskeyAssertionResult.PinRequired] is
+     * returned.
      *
      * Any [YubiKeyDevice] that provides a FIDO or smart card connection to a FIDO2 authenticator
      * works, not only YubiKeys.

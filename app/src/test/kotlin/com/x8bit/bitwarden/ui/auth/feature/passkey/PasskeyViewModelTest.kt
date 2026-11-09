@@ -78,7 +78,7 @@ class PasskeyViewModelTest : BaseViewModelTest() {
         } returns PasskeyAssertionResult.PinRequired
         coEvery {
             yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
-        } returns ASSERTION
+        } returns ASSERTION.copy(isPinUsed = true)
         coEvery {
             vaultRepository.unlockVaultWithWebAuthnPrf(credentialId = "Y3JlZA", prfOutput = "cHJm")
         } returns VaultUnlockResult.Success
@@ -112,6 +112,41 @@ class PasskeyViewModelTest : BaseViewModelTest() {
         assertEquals(
             PasskeyState.DialogState.EnterPin(mode = PasskeyMode.UNLOCK, pin = ""),
             viewModel.stateFlow.value.dialog,
+        )
+    }
+
+    @Test
+    fun `a key that verifies the user itself should stop asking for the last key's PIN`() {
+        coEvery {
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, null)
+        } returns PasskeyAssertionResult.PinRequired
+        coEvery {
+            yubiKeyPasskeyManager.getAssertion(device, UNLOCK_REQUEST, "123456")
+        } returns ASSERTION
+        coEvery {
+            vaultRepository.unlockVaultWithWebAuthnPrf(credentialId = "Y3JlZA", prfOutput = "cHJm")
+        } returns VaultUnlockResult.Success
+        val viewModel = createViewModel()
+
+        viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
+        viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
+        viewModel.trySendAction(PasskeyAction.PinChange("123456"))
+        viewModel.trySendAction(PasskeyAction.PinSubmit)
+        viewModel.trySendAction(PasskeyAction.YubiKeyConnect(device))
+        viewModel.trySendAction(PasskeyAction.StartClick(PasskeyMode.UNLOCK))
+
+        assertEquals(
+            PasskeyState(
+                isUnlockAvailable = true,
+                isPinRequired = false,
+                dialog = PasskeyState.DialogState.WaitingForKey(
+                    mode = PasskeyMode.UNLOCK,
+                    pin = null,
+                    assertionRequest = UNLOCK_REQUEST,
+                    loginToken = null,
+                ),
+            ),
+            viewModel.stateFlow.value,
         )
     }
 

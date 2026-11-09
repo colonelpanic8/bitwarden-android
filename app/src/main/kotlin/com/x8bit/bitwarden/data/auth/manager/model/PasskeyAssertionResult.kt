@@ -12,11 +12,13 @@ sealed class PasskeyAssertionResult {
      * client extension results.
      * @property prfOutput The base64url-encoded PRF output, if the credential supports PRF. This
      * is secret and must never be sent to the server.
+     * @property isPinUsed Whether the security key verified the user with its PIN.
      */
     data class Success(
         val credentialId: String,
         val deviceResponse: String,
         val prfOutput: String?,
+        val isPinUsed: Boolean = false,
     ) : PasskeyAssertionResult()
 
     /**

@@ -178,7 +178,10 @@ class PasskeyViewModel @Inject constructor(
 
     private fun handleAssertionReceive(action: PasskeyAction.Internal.AssertionReceive) {
         when (val result = action.result) {
-            is PasskeyAssertionResult.Success -> handleAssertionSuccess(action.dialog, result)
+            is PasskeyAssertionResult.Success -> {
+                mutableStateFlow.value = state.copy(isPinRequired = result.isPinUsed)
+                handleAssertionSuccess(action.dialog, result)
+            }
 
             PasskeyAssertionResult.PinRequired -> {
                 mutableStateFlow.value = state.copy(
@@ -303,8 +306,8 @@ enum class PasskeyMode {
  * Models the state of the passkey login and unlock flow.
  *
  * @property isUnlockAvailable Whether the active account has a passkey that can unlock the vault.
- * @property isPinRequired Whether the last security key needed a PIN, so it is asked for before
- * the key is tapped next time.
+ * @property isPinRequired Whether the last security key used needed a PIN, so it is asked for
+ * before the key is tapped next time. Keys that don't need a PIN ignore it.
  * @property dialog The dialog to display, if any.
  */
 data class PasskeyState(

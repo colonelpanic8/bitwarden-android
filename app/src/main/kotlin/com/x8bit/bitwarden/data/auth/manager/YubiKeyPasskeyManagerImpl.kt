@@ -96,9 +96,8 @@ class YubiKeyPasskeyManagerImpl(
             is SmartCardConnection -> Ctap2Session(connection)
             else -> throw IOException("Unsupported connection")
         }
-        if (pin == null && session.cachedInfo.options.requiresClientPin()) {
-            return PasskeyAssertionResult.PinRequired
-        }
+        val isPinNeeded = session.cachedInfo.options.requiresClientPin()
+        if (isPinNeeded && pin == null) return PasskeyAssertionResult.PinRequired
         val clientDataJson = buildWebAuthnGetClientDataJson(
             challenge = request.challenge,
             origin = request.origin,
@@ -114,8 +113,14 @@ class YubiKeyPasskeyManagerImpl(
         allowLists.forEachIndexed { index, credentialIds ->
             try {
                 return client
-                    .getAssertion(request, clientDataJson, credentialIds, pin)
-                    .toAssertionResult()
+                    // yubikit prefers a given PIN over built-in user verification.
+                    .getAssertion(
+                        request = request,
+                        clientDataJson = clientDataJson,
+                        credentialIds = credentialIds,
+                        pin = pin.takeIf { isPinNeeded },
+                    )
+                    .toAssertionResult(isPinUsed = isPinNeeded)
             } catch (e: ClientError) {
                 val hasNoCredential = e.errorCode == ClientError.Code.DEVICE_INELIGIBLE
                 if (!hasNoCredential || index == allowLists.lastIndex) throw e
@@ -203,7 +208,9 @@ private fun YubiKeyDevice.openPreferredConnection(): YubiKeyConnection =
         openConnection(SmartCardConnection::class.java)
     }
 
-private fun PublicKeyCredential.toAssertionResult(): PasskeyAssertionResult.Success {
+private fun PublicKeyCredential.toAssertionResult(
+    isPinUsed: Boolean,
+): PasskeyAssertionResult.Success {
     val response = response as AuthenticatorAssertionResponse
     val prf = clientExtensionResults?.toMap(SerializationType.JSON)?.get("prf") as? Map<*, *>
     val results = prf?.get("results") as? Map<*, *>
@@ -217,5 +224,6 @@ private fun PublicKeyCredential.toAssertionResult(): PasskeyAssertionResult.Succ
             userHandle = response.userHandle,
         ),
         prfOutput = results?.get("first") as? String,
+        isPinUsed = isPinUsed,
     )
 }
