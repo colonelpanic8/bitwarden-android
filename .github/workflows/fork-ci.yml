@@ -2,8 +2,7 @@ name: Fork CI
 on:
   push:
     branches:
-      - yubikey-passkey-login
-      - fork/**
+      - main
   workflow_dispatch:
 
 permissions:

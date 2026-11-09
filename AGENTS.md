@@ -35,6 +35,9 @@ This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
 
 Keep fork changes small and additive so they rebase onto upstream `main`.
 
+Work directly on `main` and push it; releases are tagged from it. Don't create
+topic branches or worktrees.
+
 ## Invariants
 
 - Never change the release signing key. It lives in `pass` at
