@@ -9,7 +9,7 @@ over NFC or USB. The key's FIDO2 PRF (`hmac-secret`) output unwraps the vault ke
 Bitwarden's WebAuthn PRF protocol. Enroll the passkey with encryption in the web vault first.
 The server must support passkey login, as Vaultwarden with
 [dani-garcia/vaultwarden#7784](https://github.com/dani-garcia/vaultwarden/pull/7784) does.
-It is not an official Bitwarden release.
+It is not an official Bitwarden or Vaultwarden release.
 
 - [Download the latest signed APK](https://github.com/colonelpanic8/bitwarden-android/releases/latest)
 - [Add to Obtainium](obtainium://add/https://github.com/colonelpanic8/bitwarden-android)
