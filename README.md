@@ -1,8 +1,8 @@
 # Bitwarden Android
 
-## Warden Key (personal fork)
+## Bitwarden (personal fork)
 
-This fork builds **Warden Key** (`com.colonelpanic.wardenkey`), the F-Droid flavor of the
+This fork builds **Bitwarden** (`com.colonelpanic.wardenkey`), the F-Droid flavor of the
 Bitwarden Password Manager with a separate application ID, so it installs alongside the
 official app. It adds **Log in with passkey** and **Unlock with passkey** using a YubiKey
 over NFC or USB. The key's FIDO2 PRF (`hmac-secret`) output unwraps the vault key, following

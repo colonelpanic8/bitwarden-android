@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
           mkdir -p dist
-          cp "$apk" "dist/warden-key-$GITHUB_REF_NAME.apk"
+          cp "$apk" "dist/bitwarden-$GITHUB_REF_NAME.apk"
           (cd dist && sha256sum *.apk > SHA256SUMS)
 
       - name: Remove signing material
@@ -105,5 +105,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/*.apk dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --title "Warden Key $GITHUB_REF_NAME" \
+            --title "Bitwarden $GITHUB_REF_NAME" \
             --notes "Personal build of Bitwarden Android (com.colonelpanic.wardenkey) with YubiKey passkey login and PRF unlock, built from $GITHUB_SHA. Signing certificate SHA-256: $EXPECTED_CERT_SHA256."

@@ -52,6 +52,6 @@ jobs:
       - name: Upload the debug APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: warden-key-debug
+          name: bitwarden-debug
           path: app/build/outputs/apk/fdroid/debug/*.apk
           retention-days: 14

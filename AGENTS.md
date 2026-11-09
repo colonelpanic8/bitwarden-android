@@ -1,4 +1,4 @@
-# Warden Key fork
+# Bitwarden fork
 
 This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
 `.claude/CLAUDE.md`; this file covers only what the fork adds.
@@ -6,7 +6,7 @@ This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
 ## What the fork carries
 
 - Packaging: the `fdroid` flavor is shipped as `com.colonelpanic.wardenkey`
-  ("Warden Key"), with `fdroidDebug`/`fdroidRelease` resource overrides. The
+  ("Bitwarden"), with `fdroidDebug`/`fdroidRelease` resource overrides. The
   `standard` flavor keeps upstream's ID.
 - Release signing from `keystore.properties` (written by CI) and
   `.github/workflows/fork-release.yml` / `fork-ci.yml`.
