@@ -119,7 +119,7 @@ private fun sdpResults(context: Context, devices: Set<BluetoothDevice>) = callba
         context,
         receiver,
         IntentFilter(BluetoothDevice.ACTION_UUID),
-        ContextCompat.RECEIVER_NOT_EXPORTED,
+        ContextCompat.RECEIVER_EXPORTED,
     )
     devices.forEach { it.fetchUuidsWithSdp() }
     awaitClose { context.unregisterReceiver(receiver) }

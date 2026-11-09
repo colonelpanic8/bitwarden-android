@@ -71,14 +71,19 @@ class YubiKeyPasskeyManagerImpl(
                 else -> PasskeyAssertionResult.Error(error = e)
             }
         } catch (e: IOException) {
-            PasskeyAssertionResult.Error(error = e)
+            assertionError(e)
         } catch (e: CommandException) {
-            PasskeyAssertionResult.Error(error = e)
+            assertionError(e)
         } catch (e: IllegalArgumentException) {
-            PasskeyAssertionResult.Error(error = e)
+            assertionError(e)
         } catch (e: UnsupportedPinUvAuthProtocolError) {
-            PasskeyAssertionResult.Error(error = e)
+            assertionError(e)
         }
+    }
+
+    private fun assertionError(error: Throwable): PasskeyAssertionResult.Error {
+        Timber.w(error, "Getting a passkey assertion from the security key failed")
+        return PasskeyAssertionResult.Error(error = error)
     }
 
     private fun getAssertion(
@@ -99,33 +104,58 @@ class YubiKeyPasskeyManagerImpl(
             origin = request.origin,
         )
             .toByteArray(Charsets.UTF_8)
-        val options = PublicKeyCredentialRequestOptions(
-            requireNotNull(request.challenge.decodeBase64UrlOrNull()) { "Invalid challenge" },
-            request.timeoutMillis,
-            request.relyingPartyId,
-            request.allowCredentialIds.map { id ->
-                PublicKeyCredentialDescriptor(
-                    PublicKeyCredentialType.PUBLIC_KEY,
-                    requireNotNull(id.decodeBase64UrlOrNull()) { "Invalid credential ID" },
-                )
-            },
-            UserVerificationRequirement.REQUIRED,
-            Extensions.fromMap(
-                mapOf("prf" to mapOf("eval" to mapOf("first" to request.prfSalt))),
-            ),
-        )
-        val credential = try {
-            Ctap2Client(session, listOf(PinlessHmacSecretExtension())).getAssertion(
-                ClientDataProvider.fromClientDataJson(clientDataJson),
-                options,
-                requireNotNull(URI(request.origin).host) { "Invalid origin" },
-                pin?.toCharArray(),
-                null,
-            )
-        } catch (e: MultipleAssertionsAvailable) {
-            e.select(0)
+        val client = Ctap2Client(session, listOf(PinlessHmacSecretExtension()))
+        // Ask for one allowed credential at a time. Given several, yubikit narrows the list to the
+        // authenticator's credential and then needs the response to name it, which authenticators
+        // such as WearAuthn may omit for a single-credential list.
+        val allowLists = request.allowCredentialIds
+            .map { listOf(it) }
+            .ifEmpty { listOf(emptyList()) }
+        allowLists.forEachIndexed { index, credentialIds ->
+            try {
+                return client
+                    .getAssertion(request, clientDataJson, credentialIds, pin)
+                    .toAssertionResult()
+            } catch (e: ClientError) {
+                val hasNoCredential = e.errorCode == ClientError.Code.DEVICE_INELIGIBLE
+                if (!hasNoCredential || index == allowLists.lastIndex) throw e
+            }
         }
-        return credential.toAssertionResult()
+        error("No allow list was tried")
+    }
+}
+
+private fun Ctap2Client.getAssertion(
+    request: PasskeyAssertionRequest,
+    clientDataJson: ByteArray,
+    credentialIds: List<String>,
+    pin: String?,
+): PublicKeyCredential {
+    val options = PublicKeyCredentialRequestOptions(
+        requireNotNull(request.challenge.decodeBase64UrlOrNull()) { "Invalid challenge" },
+        request.timeoutMillis,
+        request.relyingPartyId,
+        credentialIds.map { id ->
+            PublicKeyCredentialDescriptor(
+                PublicKeyCredentialType.PUBLIC_KEY,
+                requireNotNull(id.decodeBase64UrlOrNull()) { "Invalid credential ID" },
+            )
+        },
+        UserVerificationRequirement.REQUIRED,
+        Extensions.fromMap(
+            mapOf("prf" to mapOf("eval" to mapOf("first" to request.prfSalt))),
+        ),
+    )
+    return try {
+        getAssertion(
+            ClientDataProvider.fromClientDataJson(clientDataJson),
+            options,
+            requireNotNull(URI(request.origin).host) { "Invalid origin" },
+            pin?.toCharArray(),
+            null,
+        )
+    } catch (e: MultipleAssertionsAvailable) {
+        e.select(0)
     }
 }
 
