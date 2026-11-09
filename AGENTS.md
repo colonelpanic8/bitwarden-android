@@ -21,6 +21,11 @@ This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
   - `app/.../ui/auth/feature/passkey/`: the self-contained button, dialogs and
     ViewModel. Screens receive the buttons as slot parameters from their
     navigation destinations.
+  - `app/.../data/auth/manager/WearAuthn*`: a paired watch running
+    [WearAuthn](https://github.com/colonelpanic8/WearAuthn) as a
+    `YubiKeyDevice` over Bluetooth RFCOMM (service UUID
+    `5c1b1d3a-62a4-4f4e-9f0e-8a7c2d1e6b3f`, 4-byte length + APDU frames). The
+    passkey dialog looks for it alongside NFC and USB keys.
 
 Keep fork changes small and additive so they rebase onto upstream `main`.
 

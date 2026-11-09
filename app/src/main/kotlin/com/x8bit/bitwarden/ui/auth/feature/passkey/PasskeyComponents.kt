@@ -1,5 +1,7 @@
 package com.x8bit.bitwarden.ui.auth.feature.passkey
 
+import android.Manifest
+import android.os.Build
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +12,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +35,8 @@ import com.bitwarden.ui.platform.components.field.BitwardenPasswordField
 import com.bitwarden.ui.platform.components.model.CardStyle
 import com.bitwarden.ui.platform.resource.BitwardenString
 import com.bitwarden.ui.platform.theme.BitwardenTheme
+import com.x8bit.bitwarden.data.auth.manager.findWearAuthnWatch
+import com.x8bit.bitwarden.ui.platform.composition.LocalPermissionsManager
 import com.yubico.yubikit.android.YubiKitManager
 import com.yubico.yubikit.android.transport.nfc.NfcConfiguration
 import com.yubico.yubikit.android.transport.nfc.NfcNotAvailable
@@ -87,7 +95,11 @@ private fun PasskeyDialogs(
         )
 
         is PasskeyState.DialogState.WaitingForKey -> {
-            YubiKeyDiscoveryEffect(onDeviceConnect = { onAction(PasskeyAction.YubiKeyConnect(it)) })
+            val onDeviceConnect = { device: YubiKeyDevice ->
+                onAction(PasskeyAction.YubiKeyConnect(device))
+            }
+            YubiKeyDiscoveryEffect(onDeviceConnect = onDeviceConnect)
+            WearAuthnWatchDiscoveryEffect(onDeviceConnect = onDeviceConnect)
             AlertDialog(
                 onDismissRequest = onDismiss,
                 confirmButton = {
@@ -96,8 +108,14 @@ private fun PasskeyDialogs(
                         onClick = onDismiss,
                     )
                 },
-                title = { Text(text = stringResource(id = BitwardenString.yubi_key_title)) },
-                text = { Text(text = stringResource(id = BitwardenString.yubi_key_instruction)) },
+                title = { Text(text = stringResource(id = BitwardenString.security_key)) },
+                text = {
+                    Text(
+                        text = stringResource(
+                            id = BitwardenString.security_key_or_watch_instruction,
+                        ),
+                    )
+                },
                 shape = BitwardenTheme.shapes.dialog,
                 containerColor = BitwardenTheme.colorScheme.background.primary,
                 titleContentColor = BitwardenTheme.colorScheme.text.primary,
@@ -195,6 +213,31 @@ private fun YubiKeyDiscoveryEffect(onDeviceConnect: (YubiKeyDevice) -> Unit) {
         onDispose {
             manager.stopUsbDiscovery()
             if (isNfcEnabled) activity?.let(manager::stopNfcDiscovery)
+        }
+    }
+}
+
+/**
+ * Looks for a paired watch running WearAuthn while in composition, asking for the Bluetooth
+ * permission first if needed.
+ */
+@Composable
+private fun WearAuthnWatchDiscoveryEffect(onDeviceConnect: (YubiKeyDevice) -> Unit) {
+    val context = LocalContext.current
+    val permissionsManager = LocalPermissionsManager.current
+    val currentOnDeviceConnect by rememberUpdatedState(onDeviceConnect)
+    var isPermissionGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                permissionsManager.checkPermission(Manifest.permission.BLUETOOTH_CONNECT),
+        )
+    }
+    val permissionLauncher = permissionsManager.getLauncher { isPermissionGranted = it }
+    LaunchedEffect(isPermissionGranted) {
+        if (isPermissionGranted) {
+            findWearAuthnWatch(context)?.let(currentOnDeviceConnect)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
         }
     }
 }

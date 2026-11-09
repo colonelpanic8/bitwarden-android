@@ -10,4 +10,6 @@
     <string name="this_passkey_cannot_unlock_your_vault">This passkey can’t unlock your vault. Make sure it was set up with encryption in the web vault.</string>
     <string name="the_security_key_could_not_be_read_hold_it_in_place_and_try_again">The security key couldn’t be read. Hold it in place and try again.</string>
     <string name="this_security_key_cannot_verify_you">This security key can’t verify you. Set a PIN or turn on user verification on it.</string>
+    <string name="security_key">Security key</string>
+    <string name="security_key_or_watch_instruction">Approve on your paired WearAuthn watch, or hold your security key against the back of the device or insert it, then touch it.</string>
 </resources>
