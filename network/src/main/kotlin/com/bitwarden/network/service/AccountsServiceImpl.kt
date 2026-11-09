@@ -21,6 +21,7 @@ import com.bitwarden.network.model.VerificationCodeResponseJson
 import com.bitwarden.network.model.VerificationOtpResponseJson
 import com.bitwarden.network.model.VerifyOtpRequestJson
 import com.bitwarden.network.model.toBitwardenError
+import com.bitwarden.network.model.WebAuthnCredentialsResponseJson
 import com.bitwarden.network.util.HEADER_VALUE_BEARER_PREFIX
 import com.bitwarden.network.util.NetworkErrorCode
 import com.bitwarden.network.util.parseErrorBodyOrNull
@@ -82,6 +83,11 @@ internal class AccountsServiceImpl(
                     )
                     ?: throw throwable
             }
+
+    override suspend fun getWebAuthnCredentials(): Result<WebAuthnCredentialsResponseJson> =
+        authenticatedAccountsApi
+            .getWebAuthnCredentials()
+            .toResult()
 
     override suspend fun requestOneTimePasscode(): Result<Unit> =
         authenticatedAccountsApi

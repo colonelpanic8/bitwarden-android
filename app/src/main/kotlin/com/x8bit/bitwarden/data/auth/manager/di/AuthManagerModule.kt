@@ -9,6 +9,7 @@ import com.bitwarden.network.service.DevicesService
 import com.bitwarden.network.service.NewAuthRequestService
 import com.bitwarden.network.service.OrganizationService
 import com.x8bit.bitwarden.data.auth.datasource.disk.AuthDiskSource
+import com.x8bit.bitwarden.data.auth.datasource.disk.KnownPasskeyDiskSource
 import com.x8bit.bitwarden.data.auth.datasource.sdk.AuthSdkSource
 import com.x8bit.bitwarden.data.auth.manager.AddTotpItemFromAuthenticatorManager
 import com.x8bit.bitwarden.data.auth.manager.AddTotpItemFromAuthenticatorManagerImpl
@@ -24,6 +25,8 @@ import com.x8bit.bitwarden.data.auth.manager.KdfManager
 import com.x8bit.bitwarden.data.auth.manager.KdfManagerImpl
 import com.x8bit.bitwarden.data.auth.manager.KeyConnectorManager
 import com.x8bit.bitwarden.data.auth.manager.KeyConnectorManagerImpl
+import com.x8bit.bitwarden.data.auth.manager.KnownPasskeyManager
+import com.x8bit.bitwarden.data.auth.manager.KnownPasskeyManagerImpl
 import com.x8bit.bitwarden.data.auth.manager.OrganizationManager
 import com.x8bit.bitwarden.data.auth.manager.OrganizationManagerImpl
 import com.x8bit.bitwarden.data.auth.manager.TrustedDeviceManager
@@ -222,5 +225,19 @@ object AuthManagerModule {
         dispatcherManager: DispatcherManager,
     ): YubiKeyPasskeyManager = YubiKeyPasskeyManagerImpl(
         dispatcherManager = dispatcherManager,
+    )
+
+    @Provides
+    @Singleton
+    fun providesKnownPasskeyManager(
+        knownPasskeyDiskSource: KnownPasskeyDiskSource,
+        authDiskSource: AuthDiskSource,
+        accountsService: AccountsService,
+        clock: Clock,
+    ): KnownPasskeyManager = KnownPasskeyManagerImpl(
+        knownPasskeyDiskSource = knownPasskeyDiskSource,
+        authDiskSource = authDiskSource,
+        accountsService = accountsService,
+        clock = clock,
     )
 }

@@ -11,6 +11,7 @@ import com.bitwarden.network.model.SetPasswordRequestJson
 import com.bitwarden.network.model.UpdateKdfJsonRequest
 import com.bitwarden.network.model.VerificationCodeResponseJson
 import com.bitwarden.network.model.VerificationOtpResponseJson
+import com.bitwarden.network.model.WebAuthnCredentialsResponseJson
 
 /**
  * Provides an API for querying accounts endpoints.
@@ -43,6 +44,11 @@ interface AccountsService {
      * Request a one-time passcode that is sent to the user's email.
      */
     suspend fun requestOneTimePasscode(): Result<Unit>
+
+    /**
+     * Gets the passkeys the current user can log in with.
+     */
+    suspend fun getWebAuthnCredentials(): Result<WebAuthnCredentialsResponseJson>
 
     /**
      * Verify that the provided [passcode] is correct.

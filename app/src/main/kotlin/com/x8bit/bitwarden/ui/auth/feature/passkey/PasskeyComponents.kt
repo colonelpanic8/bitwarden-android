@@ -19,6 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -94,12 +99,21 @@ private fun PasskeyDialogs(
             onDismiss = onDismiss,
         )
 
-        is PasskeyState.DialogState.WaitingForKey -> {
+        is PasskeyState.DialogState.ChoosePasskey -> {
             val onDeviceConnect = { device: YubiKeyDevice ->
                 onAction(PasskeyAction.YubiKeyConnect(device))
             }
             YubiKeyDiscoveryEffect(onDeviceConnect = onDeviceConnect)
             WearAuthnWatchDiscoveryEffect(onDeviceConnect = onDeviceConnect)
+            ChoosePasskeyDialog(
+                dialog = dialog,
+                onPasskeySelect = { onAction(PasskeyAction.PasskeySelect(it)) },
+                onDismiss = onDismiss,
+            )
+        }
+
+        is PasskeyState.DialogState.WaitingForKey -> {
+            YubiKeyDiscoveryEffect(onDeviceConnect = { onAction(PasskeyAction.YubiKeyConnect(it)) })
             AlertDialog(
                 onDismissRequest = onDismiss,
                 confirmButton = {
@@ -112,7 +126,7 @@ private fun PasskeyDialogs(
                 text = {
                     Text(
                         text = stringResource(
-                            id = BitwardenString.security_key_or_watch_instruction,
+                            id = BitwardenString.hold_the_security_key_with_the_passkey_you_chose,
                         ),
                     )
                 },
@@ -134,6 +148,92 @@ private fun PasskeyDialogs(
         null -> Unit
     }
 }
+
+@Composable
+private fun ChoosePasskeyDialog(
+    dialog: PasskeyState.DialogState.ChoosePasskey,
+    onPasskeySelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            BitwardenTextButton(
+                label = stringResource(id = BitwardenString.cancel),
+                onClick = onDismiss,
+            )
+        },
+        title = { Text(text = stringResource(id = BitwardenString.choose_a_passkey)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = stringResource(
+                        id = BitwardenString.tap_or_connect_your_security_key_to_see_its_passkeys,
+                    ),
+                    style = BitwardenTheme.typography.bodyMedium,
+                )
+                val status = when {
+                    dialog.isChecking -> stringResource(id = BitwardenString.checking_security_key)
+                    else -> dialog.message?.invoke()
+                }
+                status?.let {
+                    Spacer(modifier = Modifier.height(height = 8.dp))
+                    Text(
+                        text = it,
+                        style = BitwardenTheme.typography.bodyMedium,
+                        color = BitwardenTheme.colorScheme.text.secondary,
+                    )
+                }
+                Spacer(modifier = Modifier.height(height = 8.dp))
+                dialog.passkeys.forEach { passkey ->
+                    PasskeyRow(
+                        passkey = passkey,
+                        onClick = { onPasskeySelect(passkey.credentialId) },
+                    )
+                }
+            }
+        },
+        shape = BitwardenTheme.shapes.dialog,
+        containerColor = BitwardenTheme.colorScheme.background.primary,
+        titleContentColor = BitwardenTheme.colorScheme.text.primary,
+        textContentColor = BitwardenTheme.colorScheme.text.primary,
+    )
+}
+
+@Composable
+private fun PasskeyRow(
+    passkey: PasskeyItem,
+    onClick: () -> Unit,
+) {
+    val status = stringResource(
+        id = when {
+            !passkey.canUnlock -> BitwardenString.can_no_longer_be_used
+            passkey.isSelectable -> BitwardenString.on_a_connected_security_key
+            else -> BitwardenString.not_on_a_connected_security_key
+        },
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = passkey.isSelectable, onClick = onClick)
+            .alpha(if (passkey.isSelectable) 1f else DISABLED_ROW_ALPHA)
+            .padding(vertical = 8.dp)
+            .testTag("PasskeyRow"),
+    ) {
+        Text(
+            text = passkey.name ?: stringResource(id = BitwardenString.unnamed_passkey),
+            style = BitwardenTheme.typography.bodyLarge,
+            color = BitwardenTheme.colorScheme.text.primary,
+        )
+        Text(
+            text = listOfNotNull(passkey.email, status).joinToString(separator = " · "),
+            style = BitwardenTheme.typography.bodySmall,
+            color = BitwardenTheme.colorScheme.text.secondary,
+        )
+    }
+}
+
+private const val DISABLED_ROW_ALPHA = 0.5f
 
 @Composable
 private fun PasskeyPinDialog(

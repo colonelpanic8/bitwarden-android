@@ -8,7 +8,9 @@ import com.bitwarden.network.model.ResetPasswordRequestJson
 import com.bitwarden.network.model.SetPasswordRequestJson
 import com.bitwarden.network.model.UpdateKdfJsonRequest
 import com.bitwarden.network.model.VerifyOtpRequestJson
+import com.bitwarden.network.model.WebAuthnCredentialsResponseJson
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -37,6 +39,12 @@ internal interface AuthenticatedAccountsApi {
      */
     @HTTP(method = "DELETE", path = "/accounts", hasBody = true)
     suspend fun deleteAccount(@Body body: DeleteAccountRequestJson): NetworkResult<Unit>
+
+    /**
+     * Gets the passkeys the current user can log in with.
+     */
+    @GET("/webauthn")
+    suspend fun getWebAuthnCredentials(): NetworkResult<WebAuthnCredentialsResponseJson>
 
     @POST("/accounts/request-otp")
     suspend fun requestOtp(): NetworkResult<Unit>

@@ -2,6 +2,7 @@ package com.x8bit.bitwarden.data.auth.manager
 
 import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionRequest
 import com.x8bit.bitwarden.data.auth.manager.model.PasskeyAssertionResult
+import com.x8bit.bitwarden.data.auth.manager.model.PasskeyProbeResult
 import com.yubico.yubikit.core.YubiKeyDevice
 
 /**
@@ -23,4 +24,14 @@ interface YubiKeyPasskeyManager {
         request: PasskeyAssertionRequest,
         pin: String?,
     ): PasskeyAssertionResult
+
+    /**
+     * Checks which of [credentialIds] for [relyingPartyId] are on [device], without user presence
+     * or verification, so the user can be shown which passkeys the key holds.
+     */
+    suspend fun findCredentials(
+        device: YubiKeyDevice,
+        relyingPartyId: String,
+        credentialIds: List<String>,
+    ): PasskeyProbeResult
 }

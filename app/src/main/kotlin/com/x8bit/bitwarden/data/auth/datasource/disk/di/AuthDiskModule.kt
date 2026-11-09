@@ -6,6 +6,8 @@ import com.bitwarden.data.datasource.disk.di.KeystoreEncryptedPreferences
 import com.bitwarden.data.datasource.disk.di.UnencryptedPreferences
 import com.x8bit.bitwarden.data.auth.datasource.disk.AuthDiskSource
 import com.x8bit.bitwarden.data.auth.datasource.disk.AuthDiskSourceImpl
+import com.x8bit.bitwarden.data.auth.datasource.disk.KnownPasskeyDiskSource
+import com.x8bit.bitwarden.data.auth.datasource.disk.KnownPasskeyDiskSourceImpl
 import com.x8bit.bitwarden.data.platform.datasource.disk.legacy.LegacySecureStorageMigrator
 import dagger.Module
 import dagger.Provides
@@ -37,4 +39,14 @@ object AuthDiskModule {
             legacySecureStorageMigrator = legacySecureStorageMigrator,
             json = json,
         )
+
+    @Provides
+    @Singleton
+    fun provideKnownPasskeyDiskSource(
+        @UnencryptedPreferences sharedPreferences: SharedPreferences,
+        json: Json,
+    ): KnownPasskeyDiskSource = KnownPasskeyDiskSourceImpl(
+        sharedPreferences = sharedPreferences,
+        json = json,
+    )
 }

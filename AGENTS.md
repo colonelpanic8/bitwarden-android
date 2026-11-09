@@ -26,6 +26,12 @@ This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
     `YubiKeyDevice` over Bluetooth RFCOMM (service UUID
     `5c1b1d3a-62a4-4f4e-9f0e-8a7c2d1e6b3f`, 4-byte length + APDU frames). The
     passkey dialog looks for it alongside NFC and USB keys.
+  - Passkey picker: `KnownPasskeyManager` remembers passkeys used on this
+    device (kept across logout) and names them from `GET /webauthn`, matched
+    to sync's PRF options by `encryptedUserKey`. The dialog lists them and
+    makes those on a connected key selectable: `findCredentials` probes the
+    key with `up=false`, and discoverable logins return every credential
+    (`MultipleCredentials`) instead of picking the first.
 
 Keep fork changes small and additive so they rebase onto upstream `main`.
 

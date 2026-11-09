@@ -13,13 +13,21 @@ sealed class PasskeyAssertionResult {
      * @property prfOutput The base64url-encoded PRF output, if the credential supports PRF. This
      * is secret and must never be sent to the server.
      * @property isPinUsed Whether the security key verified the user with its PIN.
+     * @property userName The account name the passkey was created for, if the key reported it.
      */
     data class Success(
         val credentialId: String,
         val deviceResponse: String,
         val prfOutput: String?,
         val isPinUsed: Boolean = false,
+        val userName: String? = null,
     ) : PasskeyAssertionResult()
+
+    /**
+     * The security key holds several matching passkeys and returned an assertion for each, so
+     * one can be chosen without using the key again.
+     */
+    data class MultipleCredentials(val assertions: List<Success>) : PasskeyAssertionResult()
 
     /**
      * The security key needs its PIN to verify the user, and no PIN was given. No assertion was

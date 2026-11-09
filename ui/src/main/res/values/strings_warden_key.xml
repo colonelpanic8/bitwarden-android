@@ -12,4 +12,12 @@
     <string name="this_security_key_cannot_verify_you">This security key can’t verify you. Set a PIN or turn on user verification on it.</string>
     <string name="security_key">Security key</string>
     <string name="security_key_or_watch_instruction">Approve on your paired WearAuthn watch, or hold your security key against the back of the device or insert it, then touch it.</string>
+    <string name="choose_a_passkey">Choose a passkey</string>
+    <string name="tap_or_connect_your_security_key_to_see_its_passkeys">Approve on your paired WearAuthn watch, or tap or connect your security key. Its passkeys can then be chosen.</string>
+    <string name="checking_security_key">Checking security key…</string>
+    <string name="on_a_connected_security_key">On a connected security key</string>
+    <string name="not_on_a_connected_security_key">Not on a connected security key</string>
+    <string name="can_no_longer_be_used">Can no longer be used</string>
+    <string name="unnamed_passkey">Unnamed passkey</string>
+    <string name="hold_the_security_key_with_the_passkey_you_chose">Hold the security key with the passkey you chose against the back of the device or insert it, then touch it.</string>
 </resources>

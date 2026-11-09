@@ -20,6 +20,7 @@ import com.bitwarden.network.model.SetPasswordRequestJson
 import com.bitwarden.network.model.UpdateKdfJsonRequest
 import com.bitwarden.network.model.VerificationCodeResponseJson
 import com.bitwarden.network.model.VerificationOtpResponseJson
+import com.bitwarden.network.model.WebAuthnCredentialsResponseJson
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -49,6 +50,55 @@ class AccountsServiceTest : BaseServiceTest() {
         val result = service.convertToKeyConnector()
 
         assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun `getWebAuthnCredentials should parse the passkeys`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {
+                  "object": "list",
+                  "data": [
+                    {
+                      "object": "webauthnCredential",
+                      "id": "id-1",
+                      "name": "YubiKey 5C",
+                      "prfStatus": 0,
+                      "encryptedUserKey": "4.userKey",
+                      "encryptedPublicKey": "2.publicKey"
+                    },
+                    {
+                      "id": "id-2",
+                      "name": "Old key",
+                      "prfStatus": 2,
+                      "encryptedUserKey": null,
+                      "encryptedPublicKey": null
+                    }
+                  ],
+                  "continuationToken": null
+                }
+                """,
+            ),
+        )
+
+        assertEquals(
+            WebAuthnCredentialsResponseJson(
+                credentials = listOf(
+                    WebAuthnCredentialsResponseJson.Credential(
+                        id = "id-1",
+                        name = "YubiKey 5C",
+                        encryptedUserKey = "4.userKey",
+                    ),
+                    WebAuthnCredentialsResponseJson.Credential(
+                        id = "id-2",
+                        name = "Old key",
+                        encryptedUserKey = null,
+                    ),
+                ),
+            ).asSuccess(),
+            service.getWebAuthnCredentials(),
+        )
     }
 
     @Test
