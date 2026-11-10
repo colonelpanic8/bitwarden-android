@@ -13,6 +13,7 @@ import com.x8bit.bitwarden.data.autofill.accessibility.model.AccessibilityAction
 import com.x8bit.bitwarden.data.autofill.accessibility.parser.AccessibilityParser
 import com.x8bit.bitwarden.data.autofill.accessibility.util.fillTextField
 import com.x8bit.bitwarden.data.autofill.accessibility.util.isSystemPackage
+import com.x8bit.bitwarden.data.autofill.accessibility.util.setTextOrPaste
 import com.x8bit.bitwarden.data.autofill.accessibility.util.shouldSkipPackage
 import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
 import com.x8bit.bitwarden.data.autofill.util.createAutofillSelectionIntent
@@ -51,6 +52,13 @@ class BitwardenAccessibilityProcessorImpl(
             }
 
             AccessibilityAction.AttemptParseUri -> handleAttemptParseUri(rootNode = eventNode)
+
+            is AccessibilityAction.FillFocusedField -> {
+                handleFillFocusedField(
+                    rootNode = rootAccessibilityNodeInfoProvider(),
+                    value = accessibilityAction.value,
+                )
+            }
         }
     }
 
@@ -72,26 +80,40 @@ class BitwardenAccessibilityProcessorImpl(
                 return null
             }
 
+        return eventNode.takeIf { it.isFillablePackage() }
+    }
+
+    private fun AccessibilityNodeInfo.isFillablePackage(): Boolean {
         // Ignore the event when the phone is inactive.
-        if (!powerManager.isInteractive) return null
+        if (!powerManager.isInteractive) return false
         // We skip if the system package.
-        if (eventNode.isSystemPackage) {
-            Timber.d("Skipping autofill for system package ${eventNode.packageName}.")
-            return null
+        if (isSystemPackage) {
+            Timber.d("Skipping autofill for system package $packageName.")
+            return false
+        }
+        // shouldSkipPackage only knows upstream's package name, not this build's.
+        if (packageName == context.packageName) {
+            Timber.d("Skipping autofill on this app's own package.")
+            return false
         }
         // We skip any package that is explicitly blocked.
-        if (eventNode.shouldSkipPackage) {
-            Timber.d("Skipping autofill on block-listed package ${eventNode.packageName}.")
-            return null
+        if (shouldSkipPackage) {
+            Timber.d("Skipping autofill on block-listed package $packageName.")
+            return false
         }
         // We skip any package that is a launcher.
-        if (launcherPackageNameManager.launcherPackages.any { it == eventNode.packageName }) {
-            Timber.d("Skipping autofill on launcher package ${eventNode.packageName}.")
-            return null
+        if (launcherPackageNameManager.launcherPackages.any { it == packageName }) {
+            Timber.d("Skipping autofill on launcher package $packageName.")
+            return false
         }
-
-        return eventNode
+        return true
     }
+
+    private fun AccessibilityNodeInfo?.findFocusedTextField(): AccessibilityNodeInfo? =
+        this
+            ?.takeIf { it.isFillablePackage() }
+            ?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            ?.takeIf { it.isEditable }
 
     private fun handleAttemptParseUri(rootNode: AccessibilityNodeInfo) {
         accessibilityParser
@@ -131,6 +153,23 @@ class BitwardenAccessibilityProcessorImpl(
         fields.usernameField?.fillTextField(value = loginView.username)
         fields.passwordFields.forEach { passwordField ->
             passwordField.fillTextField(value = loginView.password)
+        }
+    }
+
+    private fun handleFillFocusedField(rootNode: AccessibilityNodeInfo?, value: String) {
+        val textField = rootNode.findFocusedTextField()
+            ?: run {
+                toastManager.show(
+                    messageId = BitwardenString.the_text_field_to_fill_could_not_be_found,
+                    duration = Toast.LENGTH_LONG,
+                )
+                return
+            }
+        if (!textField.setTextOrPaste(context = context, value = value)) {
+            toastManager.show(
+                messageId = BitwardenString.this_text_field_could_not_be_filled,
+                duration = Toast.LENGTH_LONG,
+            )
         }
     }
 }

@@ -21,4 +21,12 @@ sealed class AccessibilityAction {
         val cipherView: CipherView,
         val uri: Uri,
     ) : AccessibilityAction()
+
+    /**
+     * Indicates that the accessibility service should fill [value] into the text field that has
+     * input focus in the currently foregrounded application.
+     */
+    data class FillFocusedField(
+        val value: String,
+    ) : AccessibilityAction()
 }

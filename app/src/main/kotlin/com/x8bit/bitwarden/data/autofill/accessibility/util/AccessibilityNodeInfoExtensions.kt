@@ -1,9 +1,17 @@
 package com.x8bit.bitwarden.data.autofill.accessibility.util
 
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.os.PersistableBundle
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.EditText
+import androidx.core.content.getSystemService
 import androidx.core.os.bundleOf
 import com.bitwarden.annotation.OmitFromCoverage
+import com.bitwarden.core.util.isBuildVersionAtLeast
 import com.x8bit.bitwarden.data.autofill.accessibility.model.KnownUsernameField
 
 private const val PACKAGE_NAME_BITWARDEN_PREFIX: String = "com.x8bit.bitwarden"
@@ -55,6 +63,54 @@ fun AccessibilityNodeInfo.fillTextField(value: String?) {
         AccessibilityNodeInfo.ACTION_SET_TEXT,
         bundleOf(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE to value),
     )
+}
+
+/**
+ * Replaces the text of this field with [value]. Fields that reject `ACTION_SET_TEXT` get [value]
+ * pasted from a clip marked sensitive instead, after which the previous clip is restored, or the
+ * clipboard cleared when the previous clip can't be read. Returns whether the field took [value].
+ */
+@OmitFromCoverage
+fun AccessibilityNodeInfo.setTextOrPaste(context: Context, value: String): Boolean {
+    val isTextSet = performAction(
+        AccessibilityNodeInfo.ACTION_SET_TEXT,
+        bundleOf(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE to value),
+    )
+    if (isTextSet) return true
+
+    val clipboardManager = context.getSystemService<ClipboardManager>() ?: return false
+    // Usually null: Android only lets the foreground app or the IME read the clipboard.
+    val previousClip = clipboardManager.primaryClip
+    clipboardManager.setPrimaryClip(
+        ClipData.newPlainText("", value).apply {
+            description.extras = PersistableBundle().apply {
+                putBoolean(
+                    if (isBuildVersionAtLeast(version = Build.VERSION_CODES.TIRAMISU)) {
+                        ClipDescription.EXTRA_IS_SENSITIVE
+                    } else {
+                        "android.content.extra.IS_SENSITIVE"
+                    },
+                    true,
+                )
+            }
+        },
+    )
+    return try {
+        performAction(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            bundleOf(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT to 0,
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT to (text?.length ?: 0),
+            ),
+        )
+        performAction(AccessibilityNodeInfo.ACTION_PASTE)
+    } finally {
+        if (previousClip != null) {
+            clipboardManager.setPrimaryClip(previousClip)
+        } else {
+            clipboardManager.clearPrimaryClip()
+        }
+    }
 }
 
 /**

@@ -20,4 +20,6 @@
     <string name="can_no_longer_be_used">Can no longer be used</string>
     <string name="unnamed_passkey">Unnamed passkey</string>
     <string name="hold_the_security_key_with_the_passkey_you_chose">Hold the security key with the passkey you chose against the back of the device or insert it, then touch it.</string>
+    <string name="the_text_field_to_fill_could_not_be_found">Couldn’t find the text field to fill. Tap it and try again.</string>
+    <string name="this_text_field_could_not_be_filled">This text field couldn’t be filled.</string>
 </resources>
