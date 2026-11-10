@@ -25,4 +25,7 @@
     <string name="choose_what_to_fill">Choose what to fill</string>
     <string name="this_item_has_nothing_to_fill">This item has nothing to fill.</string>
     <string name="tap_a_text_field_first">Tap a text field first.</string>
+    <string name="fill_field">Fill field</string>
+    <string name="from_your_vault">From your vault</string>
+    <string name="fill_the_focused_text_field_from_your_vault">Fill the focused text field from your vault</string>
 </resources>

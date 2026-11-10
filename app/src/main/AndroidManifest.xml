@@ -325,6 +325,17 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name="com.x8bit.bitwarden.data.tiles.BitwardenFillFieldTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_fill_field"
+            android:label="@string/fill_field"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!--
         The GeneratorTileService name below refers to the legacy Xamarin app's service name.
         This must always match in order for the app to properly query if it is providing generator
