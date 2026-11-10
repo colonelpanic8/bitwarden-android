@@ -24,4 +24,5 @@
     <string name="this_text_field_could_not_be_filled">This text field couldn’t be filled.</string>
     <string name="choose_what_to_fill">Choose what to fill</string>
     <string name="this_item_has_nothing_to_fill">This item has nothing to fill.</string>
+    <string name="tap_a_text_field_first">Tap a text field first.</string>
 </resources>

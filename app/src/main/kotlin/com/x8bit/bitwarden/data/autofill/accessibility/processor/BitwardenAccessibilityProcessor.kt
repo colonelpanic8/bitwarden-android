@@ -16,4 +16,12 @@ interface BitwardenAccessibilityProcessor {
         event: AccessibilityEvent,
         rootAccessibilityNodeInfoProvider: () -> AccessibilityNodeInfo?,
     )
+
+    /**
+     * Starts "fill field" for the text field focused in the active window, which the
+     * [rootAccessibilityNodeInfoProvider] gives access to.
+     */
+    fun processAccessibilityButtonClick(
+        rootAccessibilityNodeInfoProvider: () -> AccessibilityNodeInfo?,
+    )
 }

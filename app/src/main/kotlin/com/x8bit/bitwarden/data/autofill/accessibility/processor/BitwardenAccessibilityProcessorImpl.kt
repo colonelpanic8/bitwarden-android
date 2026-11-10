@@ -53,6 +53,10 @@ class BitwardenAccessibilityProcessorImpl(
 
             AccessibilityAction.AttemptParseUri -> handleAttemptParseUri(rootNode = eventNode)
 
+            AccessibilityAction.CaptureFocusedField -> {
+                handleCaptureFocusedField(rootNode = rootAccessibilityNodeInfoProvider())
+            }
+
             is AccessibilityAction.FillFocusedField -> {
                 handleFillFocusedField(
                     rootNode = rootAccessibilityNodeInfoProvider(),
@@ -60,6 +64,12 @@ class BitwardenAccessibilityProcessorImpl(
                 )
             }
         }
+    }
+
+    override fun processAccessibilityButtonClick(
+        rootAccessibilityNodeInfoProvider: () -> AccessibilityNodeInfo?,
+    ) {
+        handleCaptureFocusedField(rootNode = rootAccessibilityNodeInfoProvider())
     }
 
     private fun AccessibilityEvent.getValidNode(
@@ -154,6 +164,24 @@ class BitwardenAccessibilityProcessorImpl(
         fields.passwordFields.forEach { passwordField ->
             passwordField.fillTextField(value = loginView.password)
         }
+    }
+
+    private fun handleCaptureFocusedField(rootNode: AccessibilityNodeInfo?) {
+        if (rootNode.findFocusedTextField() == null) {
+            toastManager.show(
+                messageId = BitwardenString.tap_a_text_field_first,
+                duration = Toast.LENGTH_LONG,
+            )
+            return
+        }
+        context.startActivity(
+            createAutofillSelectionIntent(
+                context = context,
+                framework = AutofillSelectionData.Framework.ACCESSIBILITY,
+                type = AutofillSelectionData.Type.FOCUSED_FIELD,
+                uri = null,
+            ),
+        )
     }
 
     private fun handleFillFocusedField(rootNode: AccessibilityNodeInfo?, value: String) {

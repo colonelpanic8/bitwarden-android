@@ -23,6 +23,12 @@ sealed class AccessibilityAction {
     ) : AccessibilityAction()
 
     /**
+     * Indicates that the accessibility service should check that the currently foregrounded
+     * application has a focused text field and, if so, let the user pick a value to fill into it.
+     */
+    data object CaptureFocusedField : AccessibilityAction()
+
+    /**
      * Indicates that the accessibility service should fill [value] into the text field that has
      * input focus in the currently foregrounded application.
      */

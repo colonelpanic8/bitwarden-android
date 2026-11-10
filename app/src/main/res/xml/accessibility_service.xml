@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagRequestAccessibilityButton"
     android:canRetrieveWindowContent="true"
     android:description="@string/autofill_service_description"
     android:isAccessibilityTool="false"

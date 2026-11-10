@@ -1,5 +1,6 @@
 package com.x8bit.bitwarden.data.autofill.accessibility
 
+import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
@@ -26,6 +27,13 @@ class BitwardenAccessibilityService : AccessibilityService() {
     @Inject
     lateinit var accessibilityEnabledManager: AccessibilityEnabledManager
 
+    private val accessibilityButtonCallback =
+        object : AccessibilityButtonController.AccessibilityButtonCallback() {
+            override fun onClicked(controller: AccessibilityButtonController) {
+                processor.processAccessibilityButtonClick { rootInActiveWindow }
+            }
+        }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         processor.processAccessibilityEvent(event = event) { rootInActiveWindow }
     }
@@ -38,6 +46,9 @@ class BitwardenAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        accessibilityButtonController.unregisterAccessibilityButtonCallback(
+            accessibilityButtonCallback,
+        )
         return super
             .onUnbind(intent)
             .also { accessibilityEnabledManager.refreshAccessibilityEnabledFromSettings() }
@@ -46,5 +57,8 @@ class BitwardenAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         accessibilityEnabledManager.refreshAccessibilityEnabledFromSettings()
+        accessibilityButtonController.registerAccessibilityButtonCallback(
+            accessibilityButtonCallback,
+        )
     }
 }

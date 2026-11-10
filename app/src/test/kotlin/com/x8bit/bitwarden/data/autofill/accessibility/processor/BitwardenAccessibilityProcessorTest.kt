@@ -1,6 +1,7 @@
 package com.x8bit.bitwarden.data.autofill.accessibility.processor
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.view.accessibility.AccessibilityEvent
@@ -554,6 +555,91 @@ class BitwardenAccessibilityProcessorTest {
         }
         verify(exactly = 0) { focusedNode.setTextOrPaste(context = any(), value = any()) }
     }
+
+    @Suppress("MaxLineLength")
+    @Test
+    fun `processAccessibilityEvent with CaptureFocusedField and a focused text field should open the field picker`() {
+        val pickerIntent = mockk<Intent>()
+        every { createFocusedFieldPickerIntent() } returns pickerIntent
+        val event = setUpFillableEvent(action = AccessibilityAction.CaptureFocusedField)
+        val rootNode = fillableRootNode(
+            focusedField = mockk { every { isEditable } returns true },
+        )
+
+        bitwardenAccessibilityProcessor.processAccessibilityEvent(event = event) { rootNode }
+
+        verify(exactly = 1) {
+            accessibilityAutofillManager.accessibilityAction = null
+            context.startActivity(pickerIntent)
+        }
+        verify(exactly = 0) { toastManager.show(messageId = any(), duration = any()) }
+    }
+
+    @Suppress("MaxLineLength")
+    @Test
+    fun `processAccessibilityEvent with CaptureFocusedField and no focused text field should show a toast`() {
+        val event = setUpFillableEvent(action = AccessibilityAction.CaptureFocusedField)
+        val rootNode = fillableRootNode(focusedField = null)
+
+        bitwardenAccessibilityProcessor.processAccessibilityEvent(event = event) { rootNode }
+
+        verify(exactly = 1) {
+            toastManager.show(
+                messageId = BitwardenString.tap_a_text_field_first,
+                duration = Toast.LENGTH_LONG,
+            )
+        }
+        verify(exactly = 0) { context.startActivity(any()) }
+    }
+
+    @Suppress("MaxLineLength")
+    @Test
+    fun `processAccessibilityButtonClick should open the field picker without touching the pending action`() {
+        val pickerIntent = mockk<Intent>()
+        every { createFocusedFieldPickerIntent() } returns pickerIntent
+        every { powerManager.isInteractive } returns true
+        every { launcherPackageNameManager.launcherPackages } returns emptyList()
+        val rootNode = fillableRootNode(
+            focusedField = mockk { every { isEditable } returns true },
+        )
+
+        bitwardenAccessibilityProcessor.processAccessibilityButtonClick { rootNode }
+
+        verify(exactly = 1) { context.startActivity(pickerIntent) }
+        verify(exactly = 0) {
+            accessibilityAutofillManager.accessibilityAction
+            accessibilityAutofillManager.accessibilityAction = any()
+        }
+    }
+
+    @Suppress("MaxLineLength")
+    @Test
+    fun `processAccessibilityButtonClick with this app in the foreground should show a toast`() {
+        every { powerManager.isInteractive } returns true
+        every { toastManager.show(messageId = any(), duration = any()) } just runs
+        val rootNode = mockk<AccessibilityNodeInfo> {
+            every { isSystemPackage } returns false
+            every { packageName } returns OWN_PACKAGE_NAME
+        }
+
+        bitwardenAccessibilityProcessor.processAccessibilityButtonClick { rootNode }
+
+        verify(exactly = 1) {
+            toastManager.show(
+                messageId = BitwardenString.tap_a_text_field_first,
+                duration = Toast.LENGTH_LONG,
+            )
+        }
+        verify(exactly = 0) { context.startActivity(any()) }
+    }
+
+    private fun createFocusedFieldPickerIntent(): Intent =
+        createAutofillSelectionIntent(
+            context = context,
+            framework = AutofillSelectionData.Framework.ACCESSIBILITY,
+            type = AutofillSelectionData.Type.FOCUSED_FIELD,
+            uri = null,
+        )
 
     /**
      * Returns an event from a fillable app and makes [action] the pending action.
