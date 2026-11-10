@@ -32,6 +32,22 @@ This is Ivan's personal fork of `bitwarden/android`. Upstream's agent guide is
     makes those on a connected key selectable: `findCredentials` probes the
     key with `up=false`, and discoverable logins return every credential
     (`MultipleCredentials`) instead of picking the first.
+- Fill field: fills whatever text field has input focus in another app with a
+  value from the vault, including fields marked `importantForAutofill="no"`
+  that the autofill framework never sees.
+  - Triggers: `app/.../data/tiles/BitwardenFillFieldTileService.kt` (icon
+    `res/drawable/ic_fill_field.xml`) and the accessibility shortcut
+    (`flagRequestAccessibilityButton`, callback in
+    `BitwardenAccessibilityService`).
+  - `AccessibilityAction.CaptureFocusedField` / `FillFocusedField` in
+    `BitwardenAccessibilityProcessorImpl`: the focused editable node of the
+    active window gets `ACTION_SET_TEXT`, falling back to a sensitive-clip
+    paste (`setTextOrPaste`). Events from the app's own package are skipped.
+  - Picker: `AutofillSelectionData.Type.FOCUSED_FIELD` routes RootNav to the
+    vault-wide search screen; tapping an item offers
+    `CipherView.toFillableValues` and the choice goes back through
+    `AccessibilitySelectionManager.emitAccessibilityFieldValue` and
+    `AccessibilityCompletionManager.completeAccessibilityFieldFill`.
 
 Keep fork changes small and additive so they rebase onto upstream `main`.
 
