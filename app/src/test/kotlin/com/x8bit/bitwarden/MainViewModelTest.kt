@@ -362,6 +362,23 @@ class MainViewModelTest : BaseViewModelTest() {
         }
 
     @Test
+    fun `accessibility field values should emit CompleteAccessibilityFieldFill events`() =
+        runTest {
+            val viewModel = createViewModel()
+            viewModel.eventFlow.test {
+                // We skip the first 2 events because they are the default appTheme and appLanguage
+                awaitItem()
+                awaitItem()
+
+                accessibilitySelectionManager.emitAccessibilityFieldValue(value = "hunter2")
+                assertEquals(
+                    MainEvent.CompleteAccessibilityFieldFill(value = "hunter2"),
+                    awaitItem(),
+                )
+            }
+        }
+
+    @Test
     fun `autofill selection updates should emit CompleteAutofill events`() = runTest {
         val viewModel = createViewModel()
         val cipherView = mockk<CipherView>()

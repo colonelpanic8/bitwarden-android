@@ -27,6 +27,8 @@ import com.bitwarden.vault.LoginUriView
 import com.x8bit.bitwarden.data.auth.repository.AuthRepository
 import com.x8bit.bitwarden.data.auth.repository.model.ValidatePasswordResult
 import com.x8bit.bitwarden.data.autofill.accessibility.manager.AccessibilitySelectionManager
+import com.x8bit.bitwarden.data.autofill.accessibility.model.FillableValue
+import com.x8bit.bitwarden.data.autofill.accessibility.util.toFillableValues
 import com.x8bit.bitwarden.data.autofill.manager.AutofillSelectionManager
 import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
 import com.x8bit.bitwarden.data.autofill.util.login
@@ -193,6 +195,7 @@ class SearchViewModel @Inject constructor(
         when (action) {
             SearchAction.BackClick -> handleBackClick()
             SearchAction.DismissDialogClick -> handleDismissClick()
+            is SearchAction.FillableValueClick -> handleFillableValueClick(action)
             is SearchAction.ItemClick -> handleItemClick(action)
             is SearchAction.AutofillItemClick -> handleAutofillItemClick(action)
             is SearchAction.AutofillAndSaveItemClick -> handleAutofillAndSaveItemClick(action)
@@ -217,6 +220,10 @@ class SearchViewModel @Inject constructor(
     }
 
     private fun handleItemClick(action: SearchAction.ItemClick) {
+        if (state.isFocusedFieldFill && action.itemType is SearchState.DisplayItem.ItemType.Vault) {
+            showFillableValues(cipherId = action.itemId)
+            return
+        }
         val event = when (val itemType = action.itemType) {
             is SearchState.DisplayItem.ItemType.Vault -> {
                 if (state.isTotp) {
@@ -240,6 +247,44 @@ class SearchViewModel @Inject constructor(
             }
         }
         sendEvent(event)
+    }
+
+    private fun showFillableValues(cipherId: String) {
+        viewModelScope.launch {
+            val cipherView = decryptCipherViewOrNull(cipherId = cipherId) ?: return@launch
+            val totpCode = cipherView
+                .login
+                ?.totp
+                ?.takeIf { state.isPremium || cipherView.organizationUseTotp }
+                ?.let { vaultRepo.generateTotp(cipherId = cipherId, time = clock.instant()) }
+                ?.let { it as? GenerateTotpResult.Success }
+                ?.code
+            sendAction(
+                SearchAction.Internal.FillableValuesReceive(
+                    values = cipherView.toFillableValues(totpCode = totpCode),
+                ),
+            )
+        }
+    }
+
+    private fun handleFillableValuesReceive(action: SearchAction.Internal.FillableValuesReceive) {
+        mutableStateFlow.update {
+            it.copy(
+                dialogState = if (action.values.isEmpty()) {
+                    SearchState.DialogState.Error(
+                        title = null,
+                        message = BitwardenString.this_item_has_nothing_to_fill.asText(),
+                    )
+                } else {
+                    SearchState.DialogState.FillableValueSelection(values = action.values)
+                },
+            )
+        }
+    }
+
+    private fun handleFillableValueClick(action: SearchAction.FillableValueClick) {
+        mutableStateFlow.update { it.copy(dialogState = null) }
+        accessibilitySelectionManager.emitAccessibilityFieldValue(value = action.value)
     }
 
     private fun handleAutofillItemClick(action: SearchAction.AutofillItemClick) {
@@ -734,6 +779,10 @@ class SearchViewModel @Inject constructor(
                 handleDecryptCipherErrorReceive(action)
             }
 
+            is SearchAction.Internal.FillableValuesReceive -> {
+                handleFillableValuesReceive(action)
+            }
+
             is SearchAction.Internal.ArchiveCipherReceive -> handleArchiveCipherReceive(action)
             is SearchAction.Internal.UnarchiveCipherReceive -> handleUnarchiveCipherReceive(action)
         }
@@ -1106,7 +1155,7 @@ class SearchViewModel @Inject constructor(
                                 hasMasterPassword = state.hasMasterPassword,
                                 baseIconUrl = state.baseIconUrl,
                                 isIconLoadingDisabled = state.isIconLoadingDisabled,
-                                isAutofill = state.isAutofill,
+                                isAutofill = state.isAutofill && !state.isFocusedFieldFill,
                                 isPremiumUser = state.isPremium,
                                 isVfo1FoundationEnabled = state.isVfo1FoundationEnabled,
                             )
@@ -1183,6 +1232,12 @@ data class SearchState(
      */
     val isAutofill: Boolean
         get() = autofillSelectionData != null
+
+    /**
+     * Whether an item tap picks a value to fill into the focused text field of another app.
+     */
+    val isFocusedFieldFill: Boolean
+        get() = autofillSelectionData?.type == AutofillSelectionData.Type.FOCUSED_FIELD
 
     /**
      * Whether this represents a listing screen for totp.
@@ -1264,6 +1319,14 @@ data class SearchState(
          */
         @Parcelize
         data object ArchiveRequiresPremium : DialogState()
+
+        /**
+         * Lets the user choose which of an item's [values] to fill into the focused text field.
+         */
+        @Parcelize
+        data class FillableValueSelection(
+            val values: List<FillableValue>,
+        ) : DialogState()
     }
 
     /**
@@ -1547,6 +1610,13 @@ sealed class SearchAction {
     data object UpgradeToPremiumClick : SearchAction()
 
     /**
+     * User chose [value] to fill into the focused text field.
+     */
+    data class FillableValueClick(
+        val value: String,
+    ) : SearchAction()
+
+    /**
      * Models actions that the [SearchViewModel] itself might send.
      */
     sealed class Internal : SearchAction() {
@@ -1642,6 +1712,13 @@ sealed class SearchAction {
          */
         data class DecryptCipherErrorReceive(
             val error: Throwable?,
+        ) : Internal()
+
+        /**
+         * Indicates the fillable values of a tapped item are ready.
+         */
+        data class FillableValuesReceive(
+            val values: List<FillableValue>,
         ) : Internal()
     }
 }

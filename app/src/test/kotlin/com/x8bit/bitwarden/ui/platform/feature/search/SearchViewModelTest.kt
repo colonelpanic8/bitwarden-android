@@ -29,6 +29,7 @@ import com.x8bit.bitwarden.data.auth.repository.model.UserState
 import com.x8bit.bitwarden.data.auth.repository.model.ValidatePasswordResult
 import com.x8bit.bitwarden.data.autofill.accessibility.manager.AccessibilitySelectionManager
 import com.x8bit.bitwarden.data.autofill.accessibility.manager.AccessibilitySelectionManagerImpl
+import com.x8bit.bitwarden.data.autofill.accessibility.model.FillableValue
 import com.x8bit.bitwarden.data.autofill.manager.AutofillSelectionManager
 import com.x8bit.bitwarden.data.autofill.manager.AutofillSelectionManagerImpl
 import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
@@ -555,6 +556,53 @@ class SearchViewModelTest : BaseViewModelTest() {
                 viewModel.stateFlow.value,
             )
         }
+
+    @Test
+    fun `ItemClick in focused field mode should offer the item's fillable values`() = runTest {
+        specialCircumstanceManager.specialCircumstance = SpecialCircumstance.AutofillSelection(
+            autofillSelectionData = FOCUSED_FIELD_SELECTION_DATA,
+            shouldFinishWhenComplete = true,
+        )
+        coEvery {
+            vaultRepository.generateTotp(cipherId = CIPHER_ID, time = clock.instant())
+        } returns GenerateTotpResult.Success(code = "123456", periodSeconds = 30)
+        val viewModel = createViewModel()
+
+        viewModel.trySendAction(
+            SearchAction.ItemClick(
+                itemId = CIPHER_ID,
+                itemType = SearchState.DisplayItem.ItemType.Vault(type = CipherType.LOGIN),
+            ),
+        )
+
+        assertEquals(
+            SearchState.DialogState.FillableValueSelection(
+                values = listOf(
+                    FillableValue(BitwardenString.username.asText(), "mockUsername-1"),
+                    FillableValue(BitwardenString.password.asText(), "mockPassword-1"),
+                    FillableValue(BitwardenString.verification_code_totp.asText(), "123456"),
+                    FillableValue("mockName-1".asText(), "mockValue-1"),
+                    FillableValue(BitwardenString.notes.asText(), "mockNotes-1"),
+                ),
+            ),
+            viewModel.stateFlow.value.dialogState,
+        )
+    }
+
+    @Test
+    fun `FillableValueClick should emit the value for the focused field`() = runTest {
+        specialCircumstanceManager.specialCircumstance = SpecialCircumstance.AutofillSelection(
+            autofillSelectionData = FOCUSED_FIELD_SELECTION_DATA,
+            shouldFinishWhenComplete = true,
+        )
+        val viewModel = createViewModel()
+
+        accessibilitySelectionManager.accessibilityFieldValueFlow.test {
+            viewModel.trySendAction(SearchAction.FillableValueClick(value = "hunter2"))
+            assertEquals("hunter2", awaitItem())
+        }
+        assertEquals(null, viewModel.stateFlow.value.dialogState)
+    }
 
     @Test
     fun `AutofillItemClick should call emitAccessibilitySelection`() = runTest {
@@ -2497,6 +2545,13 @@ private val DEFAULT_USER_STATE = UserState(
 private const val AUTOFILL_URI = "autofill-uri"
 
 private const val CIPHER_ID = "mockId-1"
+
+private val FOCUSED_FIELD_SELECTION_DATA =
+    AutofillSelectionData(
+        type = AutofillSelectionData.Type.FOCUSED_FIELD,
+        framework = AutofillSelectionData.Framework.ACCESSIBILITY,
+        uri = null,
+    )
 
 private val AUTOFILL_SELECTION_DATA =
     AutofillSelectionData(

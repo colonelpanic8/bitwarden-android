@@ -124,6 +124,12 @@ class MainViewModel @Inject constructor(
             .onEach(::sendAction)
             .launchIn(viewModelScope)
 
+        accessibilitySelectionManager
+            .accessibilityFieldValueFlow
+            .map { MainAction.Internal.AccessibilityFieldValueReceive(it) }
+            .onEach(::sendAction)
+            .launchIn(viewModelScope)
+
         autofillSelectionManager
             .autofillSelectionFlow
             .onEach { trySendAction(MainAction.Internal.AutofillSelectionReceive(it)) }
@@ -213,6 +219,10 @@ class MainViewModel @Inject constructor(
                 handleAccessibilitySelectionReceive(action)
             }
 
+            is MainAction.Internal.AccessibilityFieldValueReceive -> {
+                handleAccessibilityFieldValueReceive(action)
+            }
+
             is MainAction.Internal.AutofillSelectionReceive -> {
                 handleAutofillSelectionReceive(action)
             }
@@ -279,6 +289,13 @@ class MainViewModel @Inject constructor(
     ) {
         specialCircumstanceManager.specialCircumstance = null
         sendEvent(MainEvent.CompleteAccessibilityAutofill(cipherView = action.cipherView))
+    }
+
+    private fun handleAccessibilityFieldValueReceive(
+        action: MainAction.Internal.AccessibilityFieldValueReceive,
+    ) {
+        specialCircumstanceManager.specialCircumstance = null
+        sendEvent(MainEvent.CompleteAccessibilityFieldFill(value = action.value))
     }
 
     private fun handleAutofillSelectionReceive(
@@ -635,6 +652,13 @@ sealed class MainAction {
         ) : Internal()
 
         /**
+         * Indicates the user has chosen [value] to fill into the focused text field.
+         */
+        data class AccessibilityFieldValueReceive(
+            val value: String,
+        ) : Internal()
+
+        /**
          * Indicates the user has manually selected the given [cipherView] for autofill.
          */
         data class AutofillSelectionReceive(
@@ -690,6 +714,12 @@ sealed class MainEvent {
      * and that the process is ready to complete.
      */
     data class CompleteAccessibilityAutofill(val cipherView: CipherView) : MainEvent()
+
+    /**
+     * Event indicating that the user has chosen [value] to fill into the focused text field and
+     * that the process is ready to complete.
+     */
+    data class CompleteAccessibilityFieldFill(val value: String) : MainEvent()
 
     /**
      * Event indicating that the user has chosen the given [cipherView] for autofill and that the

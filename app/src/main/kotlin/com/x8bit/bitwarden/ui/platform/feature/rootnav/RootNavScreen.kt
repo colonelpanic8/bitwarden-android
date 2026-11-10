@@ -17,6 +17,7 @@ import com.bitwarden.ui.platform.theme.NonNullEnterTransitionProvider
 import com.bitwarden.ui.platform.theme.NonNullExitTransitionProvider
 import com.bitwarden.ui.platform.theme.RootTransitionProviders
 import com.bitwarden.ui.platform.util.toObjectNavigationRoute
+import com.x8bit.bitwarden.data.autofill.model.AutofillSelectionData
 import com.x8bit.bitwarden.ui.auth.feature.accountsetup.SetupAutofillRoute
 import com.x8bit.bitwarden.ui.auth.feature.accountsetup.SetupBrowserAutofillRoute
 import com.x8bit.bitwarden.ui.auth.feature.accountsetup.SetupCompleteRoute
@@ -51,6 +52,8 @@ import com.x8bit.bitwarden.ui.auth.feature.vaultunlock.vaultUnlockDestination
 import com.x8bit.bitwarden.ui.auth.feature.welcome.navigateToWelcome
 import com.x8bit.bitwarden.ui.platform.components.util.rememberBitwardenNavController
 import com.x8bit.bitwarden.ui.platform.feature.rootnav.util.toVaultItemListingType
+import com.x8bit.bitwarden.ui.platform.feature.search.model.SearchType
+import com.x8bit.bitwarden.ui.platform.feature.search.navigateToSearch
 import com.x8bit.bitwarden.ui.platform.feature.settings.accountsecurity.loginapproval.navigateToLoginApproval
 import com.x8bit.bitwarden.ui.platform.feature.splash.SplashRoute
 import com.x8bit.bitwarden.ui.platform.feature.splash.navigateToSplash
@@ -264,10 +267,17 @@ fun RootNavScreen(
 
             is RootNavState.VaultUnlockedForAutofillSelection -> {
                 navController.navigateToVaultUnlockedGraph(rootNavOptions)
-                navController.navigateToVaultItemListingAsRoot(
-                    vaultItemListingType = currentState.type.toVaultItemListingType(),
-                    navOptions = rootNavOptions,
-                )
+                if (currentState.type == AutofillSelectionData.Type.FOCUSED_FIELD) {
+                    navController.navigateToSearch(
+                        searchType = SearchType.Vault.All,
+                        navOptions = rootNavOptions,
+                    )
+                } else {
+                    navController.navigateToVaultItemListingAsRoot(
+                        vaultItemListingType = currentState.type.toVaultItemListingType(),
+                        navOptions = rootNavOptions,
+                    )
+                }
             }
 
             RootNavState.VaultUnlockedForAuthRequest -> {

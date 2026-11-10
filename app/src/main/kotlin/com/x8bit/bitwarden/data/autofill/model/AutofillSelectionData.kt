@@ -24,6 +24,11 @@ data class AutofillSelectionData(
         CARD,
         LOGIN,
         IDENTITY,
+
+        /**
+         * Any vault item, followed by one of its values, to fill into the focused text field.
+         */
+        FOCUSED_FIELD,
     }
 
     /**

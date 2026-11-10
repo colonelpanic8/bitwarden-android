@@ -19,4 +19,13 @@ class AccessibilitySelectionManagerImpl : AccessibilitySelectionManager {
     override fun emitAccessibilitySelection(cipherView: CipherView) {
         accessibilitySelectionChannel.trySend(cipherView)
     }
+
+    private val accessibilityFieldValueChannel: Channel<String> = Channel(capacity = Int.MAX_VALUE)
+
+    override val accessibilityFieldValueFlow: Flow<String> =
+        accessibilityFieldValueChannel.receiveAsFlow()
+
+    override fun emitAccessibilityFieldValue(value: String) {
+        accessibilityFieldValueChannel.trySend(value)
+    }
 }

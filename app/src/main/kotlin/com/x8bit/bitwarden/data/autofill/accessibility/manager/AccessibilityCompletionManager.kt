@@ -13,4 +13,10 @@ interface AccessibilityCompletionManager {
      * the selected [cipherView].
      */
     fun completeAccessibilityAutofill(activity: Activity, cipherView: CipherView)
+
+    /**
+     * Completes the accessibility-based "fill field" flow originating with the given [activity]
+     * by filling [value] into the focused text field.
+     */
+    fun completeAccessibilityFieldFill(activity: Activity, value: String)
 }

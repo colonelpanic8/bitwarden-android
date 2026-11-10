@@ -16,4 +16,15 @@ interface AccessibilitySelectionManager {
      * Triggers an emission via [accessibilitySelectionFlow].
      */
     fun emitAccessibilitySelection(cipherView: CipherView)
+
+    /**
+     * Emits a value chosen to fill the focused text field as a result of calls to
+     * [emitAccessibilityFieldValue].
+     */
+    val accessibilityFieldValueFlow: Flow<String>
+
+    /**
+     * Triggers an emission via [accessibilityFieldValueFlow].
+     */
+    fun emitAccessibilityFieldValue(value: String)
 }

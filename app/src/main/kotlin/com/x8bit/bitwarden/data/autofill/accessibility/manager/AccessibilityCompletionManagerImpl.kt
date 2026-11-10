@@ -50,4 +50,15 @@ class AccessibilityCompletionManagerImpl(
         }
         activity.finishAndRemoveTask()
     }
+
+    override fun completeAccessibilityFieldFill(activity: Activity, value: String) {
+        val autofillSelectionData = activity.intent?.getAutofillSelectionDataOrNull()
+        if (autofillSelectionData?.framework == AutofillSelectionData.Framework.ACCESSIBILITY &&
+            autofillSelectionData.type == AutofillSelectionData.Type.FOCUSED_FIELD
+        ) {
+            accessibilityAutofillManager.accessibilityAction =
+                AccessibilityAction.FillFocusedField(value = value)
+        }
+        activity.finishAndRemoveTask()
+    }
 }

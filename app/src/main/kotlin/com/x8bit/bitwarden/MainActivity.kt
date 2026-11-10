@@ -210,6 +210,13 @@ class MainActivity : AppCompatActivity() {
                     handleCompleteAccessibilityAutofill(event)
                 }
 
+                is MainEvent.CompleteAccessibilityFieldFill -> {
+                    accessibilityCompletionManager.completeAccessibilityFieldFill(
+                        activity = this,
+                        value = event.value,
+                    )
+                }
+
                 is MainEvent.CompleteAutofill -> handleCompleteAutofill(event)
                 MainEvent.Recreate -> handleRecreate()
                 MainEvent.NavigateToDebugMenu -> navController.navigateToDebugMenuScreen()

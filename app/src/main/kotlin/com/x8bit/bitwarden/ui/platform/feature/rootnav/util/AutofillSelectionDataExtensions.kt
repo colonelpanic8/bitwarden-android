@@ -11,4 +11,7 @@ fun AutofillSelectionData.Type.toVaultItemListingType(): VaultItemListingType =
         AutofillSelectionData.Type.CARD -> VaultItemListingType.Card
         AutofillSelectionData.Type.LOGIN -> VaultItemListingType.Login
         AutofillSelectionData.Type.IDENTITY -> VaultItemListingType.Identity
+        AutofillSelectionData.Type.FOCUSED_FIELD -> {
+            error("Focused field selections search the whole vault instead of a listing.")
+        }
     }

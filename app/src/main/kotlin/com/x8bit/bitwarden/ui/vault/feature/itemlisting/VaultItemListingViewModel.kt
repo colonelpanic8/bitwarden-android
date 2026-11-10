@@ -2868,6 +2868,8 @@ class VaultItemListingViewModel @Inject constructor(
                 }
             }
 
+            AutofillSelectionData.Type.FOCUSED_FIELD -> this
+
             AutofillSelectionData.Type.IDENTITY -> {
                 this.map { vaultData ->
                     vaultData.copy(
@@ -3069,6 +3071,8 @@ data class VaultItemListingState(
                             ?.toHostOrPathOrNull()
                             ?.let { BitwardenString.items_for_uri.asText(it) }
                     }
+
+                    AutofillSelectionData.Type.FOCUSED_FIELD -> null
                 }
             }
             ?: createCredentialRequest

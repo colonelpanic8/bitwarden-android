@@ -23,7 +23,9 @@ import com.bitwarden.ui.platform.components.content.BitwardenErrorContent
 import com.bitwarden.ui.platform.components.content.BitwardenLoadingContent
 import com.bitwarden.ui.platform.components.dialog.BitwardenBasicDialog
 import com.bitwarden.ui.platform.components.dialog.BitwardenLoadingDialog
+import com.bitwarden.ui.platform.components.dialog.BitwardenSelectionDialog
 import com.bitwarden.ui.platform.components.dialog.BitwardenTwoButtonDialog
+import com.bitwarden.ui.platform.components.dialog.row.BitwardenBasicDialogRow
 import com.bitwarden.ui.platform.components.scaffold.BitwardenScaffold
 import com.bitwarden.ui.platform.components.snackbar.BitwardenSnackbarHost
 import com.bitwarden.ui.platform.components.snackbar.model.rememberBitwardenSnackbarHostState
@@ -122,6 +124,7 @@ fun SearchScreen(
         dialogState = state.dialogState,
         onDismissRequest = searchHandlers.onDismissRequest,
         onUpgradeToPremiumClick = searchHandlers.onUpgradeToPremiumClick,
+        onFillableValueClick = searchHandlers.onFillableValueClick,
     )
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
@@ -197,6 +200,7 @@ private fun SearchDialogs(
     dialogState: SearchState.DialogState?,
     onDismissRequest: () -> Unit,
     onUpgradeToPremiumClick: () -> Unit,
+    onFillableValueClick: (String) -> Unit,
 ) {
     when (dialogState) {
         SearchState.DialogState.ArchiveRequiresPremium -> {
@@ -220,6 +224,19 @@ private fun SearchDialogs(
 
         is SearchState.DialogState.Loading -> BitwardenLoadingDialog(
             text = dialogState.message(),
+        )
+
+        is SearchState.DialogState.FillableValueSelection -> BitwardenSelectionDialog(
+            title = stringResource(id = BitwardenString.choose_what_to_fill),
+            onDismissRequest = onDismissRequest,
+            selectionItems = {
+                dialogState.values.forEach { fillableValue ->
+                    BitwardenBasicDialogRow(
+                        text = fillableValue.label(),
+                        onClick = { onFillableValueClick(fillableValue.value) },
+                    )
+                }
+            },
         )
 
         null -> Unit

@@ -207,4 +207,50 @@ class AccessibilityCompletionManagerTest {
             totpManager.tryCopyTotpToClipboard(cipherView = cipherView)
         }
     }
+
+    @Test
+    fun `completeAccessibilityFieldFill should set FillFocusedField and finish the Activity`() {
+        val mockIntent: Intent = mockk()
+        every { activity.intent } returns mockIntent
+        every { mockIntent.getAutofillSelectionDataOrNull() } returns AutofillSelectionData(
+            framework = AutofillSelectionData.Framework.ACCESSIBILITY,
+            type = AutofillSelectionData.Type.FOCUSED_FIELD,
+            uri = null,
+        )
+        every {
+            accessibilityAutofillManager.accessibilityAction =
+                AccessibilityAction.FillFocusedField(value = "hunter2")
+        } just runs
+
+        accessibilityCompletionManager.completeAccessibilityFieldFill(
+            activity = activity,
+            value = "hunter2",
+        )
+
+        verify(exactly = 1) {
+            accessibilityAutofillManager.accessibilityAction =
+                AccessibilityAction.FillFocusedField(value = "hunter2")
+            activity.finishAndRemoveTask()
+        }
+    }
+
+    @Suppress("MaxLineLength")
+    @Test
+    fun `completeAccessibilityFieldFill for a login selection should finish the Activity without filling`() {
+        val mockIntent: Intent = mockk()
+        every { activity.intent } returns mockIntent
+        every { mockIntent.getAutofillSelectionDataOrNull() } returns AutofillSelectionData(
+            framework = AutofillSelectionData.Framework.ACCESSIBILITY,
+            type = AutofillSelectionData.Type.LOGIN,
+            uri = "https://example.com",
+        )
+
+        accessibilityCompletionManager.completeAccessibilityFieldFill(
+            activity = activity,
+            value = "hunter2",
+        )
+
+        verify(exactly = 1) { activity.finishAndRemoveTask() }
+        verify(exactly = 0) { accessibilityAutofillManager.accessibilityAction = any() }
+    }
 }

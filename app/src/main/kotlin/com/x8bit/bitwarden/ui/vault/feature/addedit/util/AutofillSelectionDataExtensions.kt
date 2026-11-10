@@ -36,6 +36,10 @@ fun AutofillSelectionData.toDefaultAddTypeContent(
         AutofillSelectionData.Type.IDENTITY -> {
             VaultAddEditState.ViewState.Content.ItemType.Identity()
         }
+
+        AutofillSelectionData.Type.FOCUSED_FIELD -> {
+            VaultAddEditState.ViewState.Content.ItemType.Login()
+        }
     }
     return VaultAddEditState.ViewState.Content(
         common = VaultAddEditState.ViewState.Content.Common(

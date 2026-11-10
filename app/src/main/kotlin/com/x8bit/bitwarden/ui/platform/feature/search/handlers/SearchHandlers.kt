@@ -21,6 +21,7 @@ data class SearchHandlers(
     val onVaultFilterSelect: (VaultFilterType) -> Unit,
     val onOverflowItemClick: (ListingItemOverflowAction) -> Unit,
     val onUpgradeToPremiumClick: () -> Unit,
+    val onFillableValueClick: (String) -> Unit,
 ) {
     @Suppress("UndocumentedPublicClass")
     companion object {
@@ -58,6 +59,9 @@ data class SearchHandlers(
                 },
                 onUpgradeToPremiumClick = {
                     viewModel.trySendAction(SearchAction.UpgradeToPremiumClick)
+                },
+                onFillableValueClick = {
+                    viewModel.trySendAction(SearchAction.FillableValueClick(it))
                 },
             )
     }
